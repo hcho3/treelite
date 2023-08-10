@@ -275,11 +275,9 @@ class Tree {
   // Whether to use optional fields
   bool use_opt_field_{false};
   // Number of optional fields in the extension slots
-  int32_t num_opt_field_per_tree_{0};
-  int32_t num_opt_field_per_node_{0};
+  std::int32_t num_opt_field_per_tree_{0};
+  std::int32_t num_opt_field_per_node_{0};
 
-  template <typename WriterType, typename X, typename Y>
-  friend void DumpModelAsJSON(WriterType& writer, ModelImpl<X, Y> const& model);
   template <typename WriterType, typename X, typename Y>
   friend void DumpTreeAsJSON(WriterType& writer, Tree<X, Y> const& tree);
 
