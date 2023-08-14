@@ -78,7 +78,6 @@ written to the byte sequence in the exact order they appear in the following lis
           When writing an array to the disk or a stream, we first write the length of the array (``uint64_t`` scalar),
           and then the content of the array.
      - ``leaf_vector_shape``: an array of ``uint32_t`` with length 2. The first dimension is always ``num_target``. The second dimension is either 1 or ``max(num_class)``.
-     - ``grove_per_class``: single ``bool`` scalar
 
    * Per-tree Metadata
 
