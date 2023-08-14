@@ -48,7 +48,7 @@ std::size_t exponential(treelite::Model const&, float const* in, float* out) {
 }
 
 std::size_t exponential_standard_ratio(treelite::Model const& model, float const* in, float* out) {
-  float const ratio_c = model.param.ratio_c;
+  float const ratio_c = model.ratio_c;
   *out = std::exp2(-*in / ratio_c);
   return 1;
 }
@@ -59,10 +59,13 @@ std::size_t logarithm_one_plus_exp(treelite::Model const&, float const* in, floa
 }
 
 std::size_t identity_multiclass(treelite::Model const& model, float const* in, float* out) {
-  auto num_class = static_cast<std::size_t>(model.task_param.num_class);
+  auto const num_class = static_cast<std::size_t>(model.num_class);
+  auto const num_target = model.num_target;
   TREELITE_CHECK(num_class > 1) << "model must be a multi-class classifier";
-  for (std::size_t i = 0; i < num_class; ++i) {
-    out[i] = in[i];
+  for (std::uint32_t target_id = 0; target_id < model.num_target; ++target_id) {
+    for (std::size_t i = 0; i < num_class; ++i) {
+      out[i] = in[i];
+    }
   }
   return num_class;
 }

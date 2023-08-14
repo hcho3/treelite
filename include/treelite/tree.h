@@ -64,60 +64,6 @@ struct Version {
   std::int32_t patch_ver;
 };
 
-/*! \brief Group of parameters that are dependent on the choice of the task type. */
-struct TaskParam {
-  enum class OutputType : uint8_t { kFloat = 0, kInt = 1 };
-  /*! \brief The type of output from each leaf node. */
-  OutputType output_type;
-  /*!
-   * \brief Whether we designate a subset of the trees to compute the prediction for each class.
-   *
-   * If True, the prediction for the i-th class is determined by the trees whose index is congruent
-   * to [i] modulo [num_class]. Only applicable if we are performing classification task with
-   * num_class > 2.
-   */
-  bool grove_per_class;
-  /*!
-   * \brief The number of classes in the target label.
-   *
-   * The num_class field should be >1 only when we're performing multi-class classification.
-   * Otherwise, for tasks such as binary classification, regression, and learning-to-rank, set
-   * num_class=1.
-   */
-  unsigned int num_class;
-  /*!
-   * \brief Dimension of the output from each leaf node.
-   *
-   * If >1, each leaf node produces a 1D vector output. If =1, each leaf node produces a single
-   * scalar.
-   */
-  unsigned int leaf_vector_size;
-};
-
-inline std::string OutputTypeToString(TaskParam::OutputType type) {
-  switch (type) {
-  case TaskParam::OutputType::kFloat:
-    return "float";
-  case TaskParam::OutputType::kInt:
-    return "int";
-  default:
-    return "";
-  }
-}
-
-inline TaskParam::OutputType StringToOutputType(std::string const& str) {
-  if (str == "float") {
-    return TaskParam::OutputType::kFloat;
-  } else if (str == "int") {
-    return TaskParam::OutputType::kInt;
-  } else {
-    TREELITE_LOG(FATAL) << "Unrecognized output type: " << str;
-    return TaskParam::OutputType::kFloat;  // to avoid compiler warning
-  }
-}
-
-static_assert(std::is_pod<TaskParam>::value, "TaskParameter must be POD type");
-
 /*! \brief in-memory representation of a decision tree */
 template <typename ThresholdType, typename LeafOutputType>
 class Tree {
@@ -141,22 +87,6 @@ class Tree {
     std::uint32_t sindex_;
     /*! \brief storage for leaf value or decision threshold */
     Info info_;
-    /*!
-     * \brief number of data points whose traversal paths include this node.
-     *        LightGBM models natively store this statistics.
-     */
-    std::uint64_t data_count_;
-    /*!
-     * \brief sum of hessian values for all data points whose traversal paths
-     *        include this node. This value is generally correlated positively
-     *        with the data count. XGBoost models natively store this
-     *        statistics.
-     */
-    double sum_hess_;
-    /*!
-     * \brief change in loss that is attributed to a particular split
-     */
-    double gain_;
     /*! \brief feature split type */
     SplitFeatureType split_type_;
     /*!
@@ -165,12 +95,6 @@ class Tree {
      * otherwise, take the right child.
      */
     Operator cmp_;
-    /*! \brief whether data_count_ field is present */
-    bool data_count_present_;
-    /*! \brief whether sum_hess_ field is present */
-    bool sum_hess_present_;
-    /*! \brief whether gain_present_ field is present */
-    bool gain_present_;
     /* \brief whether the list given by MatchingCategories(nid) is associated with the right child
      *        node or the left child node. True if the right child, False otherwise */
     bool categories_list_right_child_;
@@ -209,24 +133,6 @@ class Tree {
     inline SplitFeatureType SplitType() const {
       return split_type_;
     }
-    inline bool HasDataCount() const {
-      return data_count_present_;
-    }
-    inline std::uint64_t DataCount() const {
-      return data_count_;
-    }
-    inline bool HasSumHess() const {
-      return sum_hess_present_;
-    }
-    inline double SumHess() const {
-      return sum_hess_;
-    }
-    inline bool HasGain() const {
-      return gain_present_;
-    }
-    inline double Gain() const {
-      return gain_;
-    }
     inline bool CategoriesListRightChild() const {
       return categories_list_right_child_;
     }
@@ -259,17 +165,54 @@ class Tree {
   inline char const* GetFormatStringForNode();
 
  private:
-  // vector of nodes
+  // Vector of nodes
   ContiguousArray<Node> nodes_;
+  /* Leaf vectors */
   ContiguousArray<LeafOutputType> leaf_vector_;
   // Map nid to the start and end index in leaf_vector_
   // We could use std::pair, but it is not POD, so easier to use two vectors
   // here
   ContiguousArray<std::size_t> leaf_vector_begin_;
   ContiguousArray<std::size_t> leaf_vector_end_;
+  /* Matching categories for categorical splits */
   ContiguousArray<std::uint32_t> matching_categories_;
   ContiguousArray<std::size_t> matching_categories_offset_;
   bool has_categorical_split_{false};
+  /* Node statistics */
+  /*!
+   * \brief data_count_[i] indicates the number of data points in the training data set whose
+   *        traversal paths include node i. LightGBM provides this statistics.
+   */
+  ContiguousArray<std::uint64_t> data_count_;
+  /*!
+   * \brief data_count_present_[i] indicates whether data_count_[i] is available.
+   *
+   * If data_count_present_[i] is false, the corresponding data_count_[i] should be set to 0.
+   */
+  ContiguousArray<bool> data_count_present_;
+  /*!
+   * \brief sum_hess_[i] indicates the sum of the Hessian values for all data points whose traversal
+   *        paths include node i. This information is available in XGBoost and is used as a proxy of
+   *        the number of data points.
+   */
+  ContiguousArray<double> sum_hess_;
+  /*!
+   * \brief sum_hess_present_[i] indicates whether sum_hess_[i] is available.
+   *
+   * If sum_hess_present_[i] is false, the corresponding sum_hess_[i] should be set to 0.
+   */
+  ContiguousArray<bool> sum_hess_present_;
+  /*!
+   * \brief gain_[i] indicates the change in the loss function that is attributed to the particular
+   *        split at node i.
+   */
+  ContiguousArray<double> gain_;
+  /*!
+   * \brief gain_present_[i] indicates whether gain_[i] is available.
+   *
+   * If gain_present_[i] is false, the corresponding gain_[i] should be set to 0.
+   */
+  ContiguousArray<bool> gain_present_;
 
   /* Note: the following member fields shall be re-computed at serialization time */
   // Whether to use optional fields
@@ -544,74 +487,6 @@ class Tree {
   }
 };
 
-struct ModelParam {
-  /*!
-   * \defgroup model_param Extra parameters for tree ensemble models
-   * \{
-   */
-  /*!
-   * \brief name of prediction transform function
-   *
-   * This parameter specifies how to transform raw margin values into
-   * final predictions. By default, this is set to `'identity'`, which
-   * means no transformation.
-   *
-   * For the **multi-class classification task**, `pred_transfrom` must be one
-   * of the following values:
-   * \snippet src/compiler/pred_transform.cc pred_transform_multiclass_db
-   *
-   * For **all other tasks** (e.g. regression, binary classification, ranking
-   * etc.), `pred_transfrom` must be one of the following values:
-   * \snippet src/compiler/pred_transform.cc pred_transform_db
-   *
-   */
-  char pred_transform[TREELITE_MAX_PRED_TRANSFORM_LENGTH] = {0};
-  /*!
-   * \brief scaling parameter for sigmoid function
-   * `sigmoid(x) = 1 / (1 + exp(-alpha * x))`
-   *
-   * This parameter is used only when `pred_transform` is set to `'sigmoid'`.
-   * It must be strictly positive; if unspecified, it is set to 1.0.
-   */
-  float sigmoid_alpha;
-  /*!
-   * \brief scaling parameter for exponential standard ratio transformation
-   * `expstdratio(x) = exp2(-x / c)`
-   *
-   * This parameter is used only when `pred_transform` is set to `'exponential_standard_ratio'`.
-   * If unspecified, it is set to 1.0.
-   */
-  float ratio_c;
-  /*!
-   * \brief global bias of the model
-   *
-   * Predicted margin scores of all instances will be adjusted by the global
-   * bias. If unspecified, the bias is set to zero.
-   */
-  float global_bias;
-  /*! \} */
-
-  ModelParam() : sigmoid_alpha(1.0f), ratio_c(1.0f), global_bias(0.0f) {
-    std::memset(pred_transform, 0, TREELITE_MAX_PRED_TRANSFORM_LENGTH * sizeof(char));
-    std::strncpy(pred_transform, "identity", sizeof(pred_transform));
-  }
-  ~ModelParam() = default;
-  ModelParam(ModelParam const&) = default;
-  ModelParam& operator=(ModelParam const&) = default;
-  ModelParam(ModelParam&&) = default;
-  ModelParam& operator=(ModelParam&&) = default;
-
-  template <typename Container>
-  inline std::vector<std::pair<std::string, std::string>> InitAllowUnknown(Container const& kwargs);
-  inline std::map<std::string, std::string> __DICT__() const;
-};
-
-static_assert(
-    std::is_standard_layout<ModelParam>::value, "ModelParam must be in the standard layout");
-
-inline void InitParamAndCheck(
-    ModelParam* param, std::vector<std::pair<std::string, std::string>> const& cfg);
-
 /*! \brief Typed portion of the model class */
 template <typename ThresholdType, typename LeafOutputType>
 class ModelPreset {
@@ -734,10 +609,101 @@ class Model {
   TaskType task_type;
   /*! \brief whether to average tree outputs */
   bool average_tree_output{false};
-  /*! \brief Group of parameters that are specific to the particular task type */
-  TaskParam task_param{};
-  /*! \brief extra parameters */
-  ModelParam param{};
+
+  /**** Task Parameters *****/
+  /*!
+   * \defgroup task_param Parameters specifying the learning task
+   * \{
+   */
+  /*!
+   * \brief Number of targets
+   */
+  std::uint32_t num_target;
+  /*!
+   * \brief Number of classes in the target.
+   *
+   * num_class[i] indicates the number of classes in the i-th target.
+   * This field should be >1 only when we're performing multi-class classification.
+   * Otherwise, for tasks such as binary classification, regression, and learning-to-rank, set
+   * num_class=1.
+   */
+  ContiguousArray<std::uint32_t> num_class;
+  /*!
+   * \brief Shape of leaf vector. Expected value: (num_target, max(num_class))
+   */
+  ContiguousArray<std::uint32_t> leaf_vector_shape;
+  /*! \} */
+
+  /**** Per-tree metadata *****/
+  /*!
+   * \defgroup per_tree_meta Per-tree metadata. Each decision tree is annotated so that
+   *                         we know which trees are associated with each target/class.
+   * \{
+   */
+  /*!
+   * \brief target_id[i] indicates the target for which the i-th tree produces output.
+   *        Expected shape: (num_tree,)
+   *
+   * If the tree is a multi-target tree (i.e. it yields output for all targets), target_id[i] is set
+   * to -1.
+   */
+  ContiguousArray<std::int32_t> target_id;
+  /*!
+   * \brief class_id[i] indicates the class for which the i-th tree produces output.
+   *        Expected shape: (num_tree,)
+   *
+   * For vector-leaf trees that produce outputs for multiple classes, the corresponding class_id[i]
+   * is set to -1.
+   */
+  ContiguousArray<std::int32_t> class_id;
+  /*! \} */
+
+  /**** Model Parameters *****/
+  /*!
+   * \defgroup model_params Other model parameters
+   * \{
+   */
+  /*!
+   * \brief Name of prediction transform function
+   *
+   * This parameter specifies how to transform raw margin values into
+   * final predictions. By default, this is set to "identity", which
+   * means no transformation.
+   *
+   * For the **multi-class classification task**, `pred_transfrom` must be one
+   * of the following values:
+   * \snippet src/compiler/pred_transform.cc pred_transform_multiclass_db
+   *
+   * For **all other tasks** (e.g. regression, binary classification, ranking
+   * etc.), `pred_transfrom` must be one of the following values:
+   * \snippet src/compiler/pred_transform.cc pred_transform_db
+   *
+   */
+  std::string pred_transform;
+  /*!
+   * \brief Scaling parameter for sigmoid function
+   * `sigmoid(x) = 1 / (1 + exp(-alpha * x))`
+   *
+   * This parameter is used only when `pred_transform` is set to "sigmoid".
+   * It must be strictly positive; if unspecified, it is set to 1.0.
+   */
+  float sigmoid_alpha;
+  /*!
+   * \brief Scaling parameter for exponential standard ratio transformation
+   * `expstdratio(x) = exp2(-x / c)`
+   *
+   * This parameter is used only when `pred_transform` is set to "exponential_standard_ratio".
+   * If unspecified, it is set to 1.0.
+   */
+  float ratio_c;
+  /*!
+   * \brief Base scores. Expected shape: (num_target, max(num_class))
+   *
+   * Predicted margin scores of all instances will be adjusted by the base scores.
+   * If unspecified, this field is set to all zeros.
+   */
+  ContiguousArray<double> base_scores;
+  /*! \} */
 
  private:
   /* Note: the following member fields shall be re-computed at serialization time */

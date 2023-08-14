@@ -36,6 +36,7 @@ struct TaskParamV3 {
   static_assert(std::is_same_v<unsigned int, std::uint32_t>, "unsigned int unexpected size");
 };
 
+// Old ModelParam struct used in Treelite v3 format
 struct ModelParamV3 {
   char pred_transform[TREELITE_MAX_PRED_TRANSFORM_LENGTH] = {0};
   float sigmoid_alpha;
@@ -46,6 +47,29 @@ struct ModelParamV3 {
     std::memset(pred_transform, 0, TREELITE_MAX_PRED_TRANSFORM_LENGTH * sizeof(char));
     std::strncpy(pred_transform, "identity", sizeof(pred_transform));
   }
+};
+
+// Old NodeV3 struct used in Treelite v3 format
+template <typename ThresholdType, typename LeafOutputType>
+struct NodeV3 {
+  union Info {
+    LeafOutputType leaf_value;  // for leaf nodes
+    ThresholdType threshold;  // for non-leaf nodes
+  };
+  std::int32_t cleft_, cright_;
+  std::uint32_t sindex_;
+  Info info_;
+  std::uint64_t data_count_;
+  double sum_hess_;
+  double gain_;
+  SplitFeatureType split_type_;
+  Operator cmp_;
+  bool data_count_present_;
+  bool sum_hess_present_;
+  bool gain_present_;
+  /* \brief whether the list given by MatchingCategories(nid) is associated with the right child
+   *        node or the left child node. True if the right child, False otherwise */
+  bool categories_list_right_child_;
 };
 
 template <typename MixIn>
@@ -244,12 +268,31 @@ class Deserializer {
         model.variant_);
   }
 
+  void DeserializeTreesV3(Model& model) {
+    std::visit(
+        [&](auto&& concrete_model) {
+          concrete_model.trees.clear();
+          for (std::uint64_t i = 0; i < model.num_tree_; ++i) {
+            concrete_model.trees.emplace_back();
+            DeserializeTreeV3(concrete_model.trees.back());
+          }
+        },
+        model.variant_);
+  }
+
   template <typename ThresholdType, typename LeafOutputType>
   void DeserializeTree(Tree<ThresholdType, LeafOutputType>& tree) {
+    // TODO(hcho3): Implement v4 protocol
+  }
+
+  template <typename ThresholdType, typename LeafOutputType>
+  void DeserializeTreeV3(Tree<ThresholdType, LeafOutputType>& tree) {
     mixin_->DeserializePrimitiveField(&tree.num_nodes);
     mixin_->DeserializePrimitiveField(&tree.has_categorical_split_);
-    mixin_->DeserializeCompositeArray(&tree.nodes_);
-    TREELITE_CHECK_EQ(static_cast<std::size_t>(tree.num_nodes), tree.nodes_.Size())
+    // TODO(hcho3): Convert NodeV3 to Node
+    ContiguousArray<NodeV3<ThresholdType, LeafOutputType>> nodes;
+    mixin_->DeserializeCompositeArray(&nodes);
+    TREELITE_CHECK_EQ(static_cast<std::size_t>(tree.num_nodes), nodes.Size())
         << "Could not load the correct number of nodes";
     mixin_->DeserializePrimitiveArray(&tree.leaf_vector_);
     mixin_->DeserializePrimitiveArray(&tree.leaf_vector_begin_);
@@ -306,7 +349,11 @@ std::unique_ptr<Model> Model::DeserializeFromStream(std::istream& is) {
   auto mixin = std::make_shared<detail::serializer::StreamDeserializerMixIn>(is);
   detail::serializer::Deserializer<detail::serializer::StreamDeserializerMixIn> deserializer{mixin};
   std::unique_ptr<Model> model = deserializer.DeserializeHeaderAndCreateModel();
-  deserializer.DeserializeTrees(*model);
+  if (model->GetVersion().major_ver == 3) {
+    deserializer.DeserializeTreesV3(*model);
+  } else {
+    deserializer.DeserializeTrees(*model);
+  }
   return model;
 }
 

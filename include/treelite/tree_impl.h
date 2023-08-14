@@ -52,34 +52,6 @@ inline std::string GetString<double>(double x) {
 
 namespace treelite {
 
-template <typename Container>
-inline std::vector<std::pair<std::string, std::string>> ModelParam::InitAllowUnknown(
-    Container const& kwargs) {
-  std::vector<std::pair<std::string, std::string>> unknowns;
-  for (auto const& e : kwargs) {
-    if (e.first == "pred_transform") {
-      std::strncpy(this->pred_transform, e.second.c_str(), TREELITE_MAX_PRED_TRANSFORM_LENGTH - 1);
-      this->pred_transform[TREELITE_MAX_PRED_TRANSFORM_LENGTH - 1] = '\0';
-    } else if (e.first == "sigmoid_alpha") {
-      this->sigmoid_alpha = std::stof(e.second, nullptr);
-    } else if (e.first == "ratio_c") {
-      this->ratio_c = std::stof(e.second, nullptr);
-    } else if (e.first == "global_bias") {
-      this->global_bias = std::stof(e.second, nullptr);
-    }
-  }
-  return unknowns;
-}
-
-inline std::map<std::string, std::string> ModelParam::__DICT__() const {
-  std::map<std::string, std::string> ret;
-  ret.emplace("pred_transform", std::string(this->pred_transform));
-  ret.emplace("sigmoid_alpha", detail::GetString(this->sigmoid_alpha));
-  ret.emplace("ratio_c", detail::GetString(this->ratio_c));
-  ret.emplace("global_bias", detail::GetString(this->global_bias));
-  return ret;
-}
-
 template <typename ThresholdType, typename LeafOutputType>
 inline Tree<ThresholdType, LeafOutputType> Tree<ThresholdType, LeafOutputType>::Clone() const {
   Tree<ThresholdType, LeafOutputType> tree;
@@ -249,19 +221,6 @@ inline std::unique_ptr<Model> Model::Create(TypeInfo threshold_type, TypeInfo le
       = (threshold_type == TypeInfo::kFloat64) * 2 + (leaf_output_type == TypeInfo::kUInt32);
   model->variant_ = SetModelPresetVariant<0>(target_variant_index);
   return model;
-}
-
-inline void InitParamAndCheck(
-    ModelParam* param, std::vector<std::pair<std::string, std::string>> const& cfg) {
-  auto unknown = param->InitAllowUnknown(cfg);
-  if (!unknown.empty()) {
-    std::ostringstream oss;
-    for (auto const& kv : unknown) {
-      oss << kv.first << ", ";
-    }
-    std::cerr << "\033[1;31mWarning: Unknown parameters found; "
-              << "they have been ignored\u001B[0m: " << oss.str() << std::endl;
-  }
 }
 
 }  // namespace treelite
