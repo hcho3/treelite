@@ -69,9 +69,9 @@ written to the byte sequence in the exact order they appear in the following lis
      - ``leaf_vector_shape``: an array of ``uint32_t`` with length 2. The first dimension is always ``num_target``. The second dimension is either 1 or ``max(num_class)``.
      - ``grove_per_class``: single ``bool`` scalar
 
-   * Model parameters (``ModelParam``) a structure with following fields
+   * Model parameters
 
-     - ``pred_transform``: 256-character long ``char`` array. Stores a human-readable name of the transformation function that's applied to prediction outputs. The unused elements in the array should be padded with null characters (``\0``).
+     - ``pred_transform``: an array of ``char``. Stores a human-readable name of the transformation function that's applied to prediction outputs.
      - ``sigmoid_alpha``: single ``float`` scalar. This model parameter is relevant when ``pred_transform="sigmoid"``.
      - ``ratio_c``: single ``float`` scalar. This model parameter is relevant when ``pred_transform="exponential_standard_ratio"``.
 
