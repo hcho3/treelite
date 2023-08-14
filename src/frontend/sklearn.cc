@@ -34,7 +34,7 @@ class RandomForestRegressorMixIn {
       treelite::Model* model, int n_features, [[maybe_unused]] int n_classes) const {
     model->num_feature = n_features;
     model->average_tree_output = true;
-    model->task_type = treelite::TaskType::kBinaryClfRegr;
+    model->task_type = treelite::TaskType::kRegressor;
     model->task_param.grove_per_class = false;
     model->task_param.output_type = treelite::TaskParam::OutputType::kFloat;
     model->task_param.num_class = 1;
@@ -58,7 +58,7 @@ class IsolationForestMixIn {
       treelite::Model* model, int n_features, [[maybe_unused]] int n_classes) const {
     model->num_feature = n_features;
     model->average_tree_output = true;
-    model->task_type = treelite::TaskType::kBinaryClfRegr;
+    model->task_type = treelite::TaskType::kIsolationForest;
     model->task_param.grove_per_class = false;
     model->task_param.output_type = treelite::TaskParam::OutputType::kFloat;
     model->task_param.num_class = 1;
@@ -84,7 +84,7 @@ class RandomForestBinaryClassifierMixIn {
       treelite::Model* model, int n_features, [[maybe_unused]] int n_classes) const {
     model->num_feature = n_features;
     model->average_tree_output = true;
-    model->task_type = treelite::TaskType::kBinaryClfRegr;
+    model->task_type = treelite::TaskType::kBinaryClf;
     model->task_param.grove_per_class = false;
     model->task_param.output_type = treelite::TaskParam::OutputType::kFloat;
     model->task_param.num_class = 1;
@@ -109,7 +109,7 @@ class RandomForestMulticlassClassifierMixIn {
       treelite::Model* model, int n_features, [[maybe_unused]] int n_classes) const {
     model->num_feature = n_features;
     model->average_tree_output = true;
-    model->task_type = treelite::TaskType::kMultiClfProbDistLeaf;
+    model->task_type = treelite::TaskType::kMultiClf;
     model->task_param.grove_per_class = false;
     model->task_param.output_type = treelite::TaskParam::OutputType::kFloat;
     model->task_param.num_class = n_classes;
@@ -139,7 +139,7 @@ class GradientBoostingRegressorMixIn {
       treelite::Model* model, int n_features, [[maybe_unused]] int n_classes) const {
     model->num_feature = n_features;
     model->average_tree_output = false;
-    model->task_type = treelite::TaskType::kBinaryClfRegr;
+    model->task_type = treelite::TaskType::kRegressor;
     model->task_param.grove_per_class = false;
     model->task_param.output_type = treelite::TaskParam::OutputType::kFloat;
     model->task_param.num_class = 1;
@@ -161,7 +161,7 @@ class GradientBoostingBinaryClassifierMixIn {
       treelite::Model* model, int n_features, [[maybe_unused]] int n_classes) const {
     model->num_feature = n_features;
     model->average_tree_output = false;
-    model->task_type = treelite::TaskType::kBinaryClfRegr;
+    model->task_type = treelite::TaskType::kBinaryClf;
     model->task_param.grove_per_class = false;
     model->task_param.output_type = treelite::TaskParam::OutputType::kFloat;
     model->task_param.num_class = 1;
@@ -183,7 +183,7 @@ class GradientBoostingMulticlassClassifierMixIn {
       treelite::Model* model, int n_features, [[maybe_unused]] int n_classes) const {
     model->num_feature = n_features;
     model->average_tree_output = false;
-    model->task_type = treelite::TaskType::kMultiClfGrovePerClass;
+    model->task_type = treelite::TaskType::kMultiClf;
     model->task_param.grove_per_class = true;
     model->task_param.output_type = treelite::TaskParam::OutputType::kFloat;
     model->task_param.num_class = n_classes;
@@ -207,7 +207,7 @@ class HistGradientBoostingRegressorMixIn {
       treelite::Model* model, int n_features, [[maybe_unused]] int n_classes) const {
     model->num_feature = n_features;
     model->average_tree_output = false;
-    model->task_type = treelite::TaskType::kBinaryClfRegr;
+    model->task_type = treelite::TaskType::kRegressor;
     model->task_param.grove_per_class = false;
     model->task_param.output_type = treelite::TaskParam::OutputType::kFloat;
     model->task_param.num_class = 1;
@@ -235,7 +235,7 @@ class HistGradientBoostingBinaryClassifierMixIn {
       treelite::Model* model, int n_features, [[maybe_unused]] int n_classes) const {
     model->num_feature = n_features;
     model->average_tree_output = false;
-    model->task_type = treelite::TaskType::kBinaryClfRegr;
+    model->task_type = treelite::TaskType::kBinaryClf;
     model->task_param.grove_per_class = false;
     model->task_param.output_type = treelite::TaskParam::OutputType::kFloat;
     model->task_param.num_class = 1;

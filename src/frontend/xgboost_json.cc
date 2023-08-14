@@ -601,11 +601,15 @@ bool XGBoostModelHandler::EndObject([[maybe_unused]] std::size_t memberCount) {
   output.model->task_param.leaf_vector_size = 1;
   if (output.model->task_param.num_class > 1) {
     // multi-class classifier
-    output.model->task_type = TaskType::kMultiClfGrovePerClass;
+    output.model->task_type = TaskType::kMultiClf;
     output.model->task_param.grove_per_class = true;
   } else {
     // binary classifier or regressor
-    output.model->task_type = TaskType::kBinaryClfRegr;
+    if (output.objective_name.rfind("binary:", 0) == 0) {
+      output.model->task_type = TaskType::kBinaryClf;
+    } else {
+      output.model->task_type = TaskType::kRegressor;
+    }
     output.model->task_param.grove_per_class = false;
   }
   // Before XGBoost 1.0.0, the global bias saved in model is a transformed value.  After

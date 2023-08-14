@@ -405,11 +405,15 @@ inline std::unique_ptr<treelite::Model> ParseStream(std::istream& fi) {
   model->average_tree_output = average_output_;
   if (num_class_ > 1) {
     // multi-class classifier
-    model->task_type = treelite::TaskType::kMultiClfGrovePerClass;
+    model->task_type = treelite::TaskType::kMultiClf;
     model->task_param.grove_per_class = true;
   } else {
     // binary classifier or regressor
-    model->task_type = treelite::TaskType::kBinaryClfRegr;
+    if (obj_name_.rfind("muiticlass", 0) == 0) {
+      model->task_type = treelite::TaskType::kMultiClf;
+    } else {
+      model->task_type = treelite::TaskType::kBinaryClf;
+    }
     model->task_param.grove_per_class = false;
   }
   model->task_param.output_type = treelite::TaskParam::OutputType::kFloat;

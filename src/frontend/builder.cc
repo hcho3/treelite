@@ -506,19 +506,24 @@ std::unique_ptr<Model> ModelBuilder::CommitModel() {
     model->task_param.leaf_vector_size = 1;
     if (model->task_param.num_class > 1) {
       // multi-class classifier, XGBoost/LightGBM style
-      model->task_type = TaskType::kMultiClfGrovePerClass;
+      model->task_type = TaskType::kMultiClf;
       model->task_param.grove_per_class = true;
       TREELITE_CHECK_EQ(model->GetNumTree() % model->task_param.num_class, 0)
           << "For multi-class classifiers with gradient boosted trees, the number of trees must be "
           << "evenly divisible by the number of output groups";
     } else {
       // binary classifier or regressor
-      model->task_type = TaskType::kBinaryClfRegr;
+      // TODO(hcho3): User should explicitly specify whether the model is classifier
+      if (std::string(model->param.pred_transform) == "sigmoid") {
+        model->task_type = TaskType::kBinaryClf;
+      } else {
+        model->task_type = TaskType::kRegressor;
+      }
       model->task_param.grove_per_class = false;
     }
   } else if (flag_leaf_vector == 1) {
     // multi-class classifier, sklearn RF style
-    model->task_type = TaskType::kMultiClfProbDistLeaf;
+    model->task_type = TaskType::kMultiClf;
     model->task_param.grove_per_class = false;
     TREELITE_CHECK_GT(model->task_param.num_class, 1)
         << "Expected leaf vectors with length exceeding 1";

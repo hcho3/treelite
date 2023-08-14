@@ -232,8 +232,6 @@ std::unique_ptr<treelite::Model> BuildModelFromJSONString(
   model->num_feature = ExpectInt(model_spec, "num_feature");
   model->average_tree_output = ExpectBool(model_spec, "average_tree_output");
   model->task_type = StringToTaskType(ExpectString(model_spec, "task_type"));
-  TREELITE_CHECK(model->task_type != TaskType::kMultiClfCategLeaf)
-      << "Categorical leafs are not supported";
   model->task_param = ParseTaskParam(ExpectObject(model_spec, "task_param"));
   model->param = ParseModelParam(ExpectObject(model_spec, "model_param"));
 

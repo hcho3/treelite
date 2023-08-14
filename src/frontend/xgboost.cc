@@ -415,11 +415,15 @@ inline std::unique_ptr<treelite::Model> ParseStream(std::istream& fi) {
   int const num_class = std::max(mparam_.num_class, 1);
   if (num_class > 1) {
     // multi-class classifier
-    model->task_type = treelite::TaskType::kMultiClfGrovePerClass;
+    model->task_type = treelite::TaskType::kMultiClf;
     model->task_param.grove_per_class = true;
   } else {
     // binary classifier or regressor
-    model->task_type = treelite::TaskType::kBinaryClfRegr;
+    if (name_obj_.rfind("binary:", 0) == 0) {
+      model->task_type = treelite::TaskType::kBinaryClf;
+    } else {
+      model->task_type = treelite::TaskType::kRegressor;
+    }
     model->task_param.grove_per_class = false;
   }
   model->task_param.output_type = treelite::TaskParam::OutputType::kFloat;

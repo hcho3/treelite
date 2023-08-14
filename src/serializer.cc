@@ -18,6 +18,36 @@ namespace treelite {
 
 namespace detail::serializer {
 
+// Old TaskType enum used in Treelite v3 format
+enum class TaskTypeV3 : std::uint8_t {
+  kBinaryClfRegr = 0,
+  kMultiClfGrovePerClass = 1,
+  kMultiClfProbDistLeaf = 2,
+  kMultiClfCategLeaf = 3
+};
+
+// Old TaskParam struct used in Treelite v3 format
+struct TaskParamV3 {
+  enum class OutputType : std::uint8_t { kFloat = 0, kInt = 1 };
+  OutputType output_type{OutputType::kFloat};
+  bool grove_per_class{false};
+  std::uint32_t num_class{1};
+  std::uint32_t leaf_vector_size{1};
+  static_assert(std::is_same_v<unsigned int, std::uint32_t>, "unsigned int unexpected size");
+};
+
+struct ModelParamV3 {
+  char pred_transform[TREELITE_MAX_PRED_TRANSFORM_LENGTH] = {0};
+  float sigmoid_alpha;
+  float ratio_c;
+  float global_bias;
+
+  ModelParamV3() : sigmoid_alpha{1.0f}, ratio_c{1.0f}, global_bias{0.0f} {
+    std::memset(pred_transform, 0, TREELITE_MAX_PRED_TRANSFORM_LENGTH * sizeof(char));
+    std::strncpy(pred_transform, "identity", sizeof(pred_transform));
+  }
+};
+
 template <typename MixIn>
 class Serializer {
  public:
@@ -95,6 +125,47 @@ class Deserializer {
  public:
   explicit Deserializer(std::shared_ptr<MixIn> mixin) : mixin_(mixin) {}
 
+  std::unique_ptr<Model> DeserializeHeaderAndCreateModelV3(
+      std::int32_t major_ver, std::int32_t minor_ver, std::int32_t patch_ver) {
+    TypeInfo threshold_type, leaf_output_type;
+    mixin_->DeserializePrimitiveField(&threshold_type);
+    mixin_->DeserializePrimitiveField(&leaf_output_type);
+
+    std::unique_ptr<Model> model = Model::Create(threshold_type, leaf_output_type);
+    model->major_ver_ = major_ver;
+    model->minor_ver_ = minor_ver;
+    model->patch_ver_ = patch_ver;
+
+    // Number of trees
+    mixin_->DeserializePrimitiveField(&model->num_tree_);
+
+    // Header 2
+    TaskTypeV3 task_type;
+    TaskParamV3 task_param;
+    ModelParamV3 model_param;
+    mixin_->DeserializePrimitiveField(&model->num_feature);
+    // TODO(hcho3): Convert TaskTypeV3 to TaskType
+    // kBinaryClfRegr -> kBinaryClf or kRegressor (use heuristic to decide)
+    // kMultiClfGrovePerClass -> kMultiClf
+    // kMultiClfProbDistLeaf -> kMultiClf
+    // kMultiClfCategLeaf -> (throw exception)
+    mixin_->DeserializePrimitiveField(&task_type);
+    mixin_->DeserializePrimitiveField(&model->average_tree_output);
+    // TODO(hcho3): Convert TaskParamV3 to appropriate parameters
+    mixin_->DeserializeCompositeField(&task_param);
+    // TODO(hcho3): Convert ModelParamV3 to appropriate parameters
+    mixin_->DeserializeCompositeField(&model_param);
+
+    /* Extension Slot 1: Per-model optional fields, not used */
+    mixin_->DeserializePrimitiveField(&model->num_opt_field_per_model_);
+    // Ignore extra fields
+    for (std::int32_t i = 0; i < model->num_opt_field_per_model_; ++i) {
+      mixin_->SkipOptionalField();
+    }
+
+    return model;
+  }
+
   std::unique_ptr<Model> DeserializeHeaderAndCreateModel() {
     // Header 1
     std::int32_t major_ver, minor_ver, patch_ver;
@@ -108,6 +179,14 @@ class Deserializer {
                           << TREELITE_VER_MINOR << "." << TREELITE_VER_PATCH << std::endl
                           << "The model checkpoint was generated from Treelite version "
                           << major_ver << "." << minor_ver << "." << patch_ver;
+    } else if (major_ver == 3 && minor_ver == 9) {
+      // Deserialize from 3.9
+      TREELITE_LOG(WARNING)
+          << "The model you are loading originated from Treelite version 3.9. To use the latest "
+          << "functionalities, convert your original tree model again using the current version of "
+          << "Treelite (" << TREELITE_VER_MAJOR << "." << TREELITE_VER_MINOR << "."
+          << TREELITE_VER_PATCH << ")." << std::endl;
+      return DeserializeHeaderAndCreateModelV3(major_ver, minor_ver, patch_ver);
     } else if (major_ver == TREELITE_VER_MAJOR && minor_ver > TREELITE_VER_MINOR) {
       TREELITE_LOG(WARNING)
           << "The model you are loading originated from a newer Treelite version; some "
@@ -117,6 +196,8 @@ class Deserializer {
           << "The model checkpoint was generated from Treelite version " << major_ver << "."
           << minor_ver << "." << patch_ver;
     }
+
+    // TODO(hcho3): Implement v4 protocol
     TypeInfo threshold_type, leaf_output_type;
     mixin_->DeserializePrimitiveField(&threshold_type);
     mixin_->DeserializePrimitiveField(&leaf_output_type);

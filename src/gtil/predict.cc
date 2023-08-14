@@ -413,16 +413,17 @@ inline void PredictRaw(treelite::Model const& model, DMatrixType const* input, f
   InitOutPredictions(model, input, output);
 
   switch (model.task_type) {
-  case treelite::TaskType::kBinaryClfRegr:
+  case treelite::TaskType::kBinaryClf:
+  case treelite::TaskType::kRegressor:
+  case treelite::TaskType::kLearningToRank:
+  case treelite::TaskType::kIsolationForest:
     PredictBatchDispatch<BinaryClfRegrOutputLogic>(model, input, output, thread_config);
     break;
-  case treelite::TaskType::kMultiClfGrovePerClass:
-    PredictBatchDispatch<MultiClfGrovePerClassOutputLogic>(model, input, output, thread_config);
+  case treelite::TaskType::kMultiClf:
+    // TODO(hcho3): Implement prediction with a multi-class classifier, using field target_id and
+    // class_id
+    TREELITE_LOG(FATAL) << "Multiclass classifier not yet implemented";
     break;
-  case treelite::TaskType::kMultiClfProbDistLeaf:
-    PredictBatchDispatch<MultiClfProbDistLeafOutputLogic>(model, input, output, thread_config);
-    break;
-  case treelite::TaskType::kMultiClfCategLeaf:
   default:
     TREELITE_LOG(FATAL) << "Unsupported task type of the tree ensemble model: "
                         << static_cast<int>(model.task_type);
@@ -619,19 +620,18 @@ inline std::size_t PredictScoreByTree(treelite::Model const& model, DMatrixType 
   auto const num_tree = model.GetNumTree();
   auto const num_class = model.task_param.num_class;
   switch (model.task_type) {
-  case treelite::TaskType::kBinaryClfRegr:
-  case treelite::TaskType::kMultiClfGrovePerClass:
+  case treelite::TaskType::kBinaryClf:
+  case treelite::TaskType::kRegressor:
+  case treelite::TaskType::kLearningToRank:
+  case treelite::TaskType::kIsolationForest:
     PredictScoreByTreeImpl<PredictScoreByTreeWithScalarLeafOutputLogic>(
         model, input, output, thread_config);
     TREELITE_CHECK_EQ(num_tree % num_class, 0);
     output_shape = {num_row, num_tree};
     return num_row * num_tree;
-  case treelite::TaskType::kMultiClfProbDistLeaf:
-    PredictScoreByTreeImpl<PredictScoreByTreeWithVectorLeafOutputLogic>(
-        model, input, output, thread_config);
-    output_shape = {num_row, num_tree, num_class};
-    return num_row * num_tree * num_class;
-  case treelite::TaskType::kMultiClfCategLeaf:
+  case treelite::TaskType::kMultiClf:
+    // TODO(hcho3): Implement PredictScoreByTree for multi-class classifier
+    TREELITE_LOG(FATAL) << "Not yet implemented";
   default:
     TREELITE_LOG(FATAL) << "Unsupported task type of the tree ensemble model: "
                         << static_cast<int>(model.task_type);
@@ -729,7 +729,8 @@ std::size_t GetPredictOutputSize(
   case PredictType::kPredictLeafID:
     return num_row * model->GetNumTree();
   case PredictType::kPredictPerTree:
-    if (model->task_type == TaskType::kMultiClfProbDistLeaf) {
+    // TODO(hcho3): Correctly compute output size, taking account of multi-class / multi-target
+    if (model->task_type == TaskType::kMultiClf) {
       return num_row * model->GetNumTree() * model->task_param.num_class;
     } else {
       return num_row * model->GetNumTree();
