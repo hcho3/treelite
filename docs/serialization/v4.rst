@@ -66,14 +66,13 @@ written to the byte sequence in the exact order they appear in the following lis
 
      - ``num_target``: single ``uint32_t`` scalar. Number of targets in the model. ``num_target > 1`` indicates a multi-target models.
      - ``num_class``: an array of ``uint32_t`` with length ``num_target``.
+
+       .. note:: Writing an array to the disk or a stream
+
+          When writing an array to the disk or a stream, we first write the length of the array (``uint64_t`` scalar),
+          and then the content of the array.
      - ``leaf_vector_shape``: an array of ``uint32_t`` with length 2. The first dimension is always ``num_target``. The second dimension is either 1 or ``max(num_class)``.
      - ``grove_per_class``: single ``bool`` scalar
-
-   * Model parameters
-
-     - ``pred_transform``: an array of ``char``. Stores a human-readable name of the transformation function that's applied to prediction outputs.
-     - ``sigmoid_alpha``: single ``float`` scalar. This model parameter is relevant when ``pred_transform="sigmoid"``.
-     - ``ratio_c``: single ``float`` scalar. This model parameter is relevant when ``pred_transform="exponential_standard_ratio"``.
 
    * Per-tree Metadata
 
@@ -82,13 +81,13 @@ written to the byte sequence in the exact order they appear in the following lis
      - ``class_id``: an array of ``int32_t``. ``class_id[i]`` indicates the class for which the ``i``-th tree produces output. For vector-leaf trees that produce outputs for multiple classes,
        the corresponding ``class_id[i]`` is set to -1. The ``class_id`` array is expected to have length ``num_tree``.
 
-   * ``base_scores``: an array of ``LeafOutputType``. This vector is expected to have length ``num_target * max(num_class)``. The elements will be laid out in the row-major layout.
-     The predicted margin scores of all data points will be adjusted by this vector.
+   * Model parameters
 
-     .. note:: Writing an array to the disk or a stream
-
-        When writing an array to the disk or a stream, we first write the length of the array (``uint64_t`` scalar),
-        and then the content of the array.
+     - ``pred_transform``: an array of ``char``. Stores a human-readable name of the transformation function that's applied to prediction outputs.
+     - ``sigmoid_alpha``: single ``float`` scalar. This model parameter is relevant when ``pred_transform="sigmoid"``.
+     - ``ratio_c``: single ``float`` scalar. This model parameter is relevant when ``pred_transform="exponential_standard_ratio"``.
+     - ``base_scores``: an array of ``double``. This vector is expected to have length ``num_target * max(num_class)``. The elements will be laid out in the row-major layout.
+       The predicted margin scores of all data points will be adjusted by this vector.
 
 #. Extension slot 1: Per-model optional fields. This field is currently not used.
 
