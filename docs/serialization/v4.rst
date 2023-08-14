@@ -25,6 +25,12 @@ We first define a set of enum types to be used in the serialization format.
   - ``kLearningToRank`` (3): learning-to-rank
   - ``kIsolationForest`` (4): isolation forest
 
+* ``SplitFeatureType``: underlying type ``int8_t``. Indicates the type of an internal test node in a tree.
+
+  - ``kNone`` (0)
+  - ``kNumerical`` (1)
+  - ``kCategorical`` (2)
+
 * ``Operator``: underlying type ``int8_t``. Indicates the comparison operator used in an internal test node in a tree.
 
   - ``kNone`` (0)
@@ -103,6 +109,7 @@ written to the byte sequence in the exact order they appear in the following lis
      - ``cright_``: single ``int32_t`` scalar. Indicates the ID of the right child node. Set to ``-1`` to indicate the lack of the right child.
      - ``sindex_``: single ``uint32_t`` scalar. This field gives both the feature ID used in the current test node (``split_index``), as well as the default direction for the missing value (``default_left``). Set this value by computing ``split_index | (default_left ? (1U << 31U) : 0)``.
      - ``info_``: a union type containing ``leaf_value`` (of type ``LeafOutputType``) and ``threshold`` (of type ``ThresholdType``). To set this field, determine whether the node is a leaf node or an internal test node. Use ``leaf_value`` for leaf nodes; use ``threshold`` for internal test nodes.
+     - ``split_type_``: single ``int8_t`` scalar representing enum ``SplitFeatureType``.
      - ``cmp_``: single ``int8_t`` scalar representing enum ``Operator``.
      - ``categories_list_right_child_``: single ``bool`` scalar.
 
