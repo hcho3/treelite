@@ -65,9 +65,9 @@ written to the byte sequence in the exact order they appear in the following lis
 #. Number of trees (``num_tree``): single ``uint64_t`` scalar.
 #. Header 2
 
-   * Number of features in data: single ``int32_t`` scalar.
+   * Number of features in data (``num_feature``): single ``int32_t`` scalar.
    * Task type (``task_type``): single ``uint8_t`` scalar representing enum ``TaskType``.
-   * Whether to average tree outputs: single ``bool`` scalar.
+   * ``average_tree_output``: single ``bool`` scalar indicating whether to average tree outputs
    * Task parameters
 
      - ``num_target``: single ``uint32_t`` scalar. Number of targets in the model. ``num_target > 1`` indicates a multi-target models.
@@ -100,8 +100,8 @@ written to the byte sequence in the exact order they appear in the following lis
 
 #. Tree 0: First tree, which is to be represented by the following fields.
 
-   * Number of nodes: single ``int32_t`` scalar.
-   * If categorical splits exist: single ``bool`` scalar.
+   * ``num_nocdes``: single ``int32_t`` scalar indicating the number of nodes
+   * ``has_categorical_split_``: single ``bool`` scalar indicating if categorical splits exist
    * Array of nodes: an array of ``Node`` structure, where ``Node`` consists of the following fields:
 
      - ``cleft_``: single ``int32_t`` scalar. Indicates the ID of the left child node. Set to ``-1`` to indicate the lack of the left child.
@@ -138,11 +138,11 @@ written to the byte sequence in the exact order they appear in the following lis
 
    * Extension slot 2: Per-tree optional fields. This field is currently not used.
 
-     - Number of fields: single ``int32_t`` scalar. Set this value to ``0``, to indicate the lack of optional fields.
+     - ``num_opt_field_per_tree_``: single ``int32_t`` scalar. Set this value to ``0``, to indicate the lack of optional fields.
 
    * Extension slot 3: Per-node optional fields. This field is currently not used.
 
-     - Number of fields: single ``int32_t`` scalar. Set this value to ``0``, to indicate the lack of optional fields.
+     - ``num_opt_field_per_node_``: single ``int32_t`` scalar. Set this value to ``0``, to indicate the lack of optional fields.
 
 #. Tree 1: Use the same set of fields as Tree 0.
 #. Other trees ...
