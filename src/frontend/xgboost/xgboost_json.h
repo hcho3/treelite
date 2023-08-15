@@ -1,5 +1,5 @@
 /*!
- * Copyright (c) 2020 by Contributors
+ * Copyright (c) 2020-2023 by Contributors
  * \file xgboost_json.h
  * \brief Methods for loading models from XGBoost-style JSON
  * \author William Hicks
@@ -15,8 +15,8 @@
 
 #ifndef SRC_FRONTEND_XGBOOST_XGBOOST_JSON_H_
 #define SRC_FRONTEND_XGBOOST_XGBOOST_JSON_H_
-namespace treelite {
-namespace details {
+
+namespace treelite::details {
 
 class BaseHandler;
 
@@ -340,12 +340,18 @@ struct ParsedXGBoostModel {
   std::vector<unsigned> version;
   std::vector<int> tree_info;
   std::string objective_name;
+  int size_leaf_vector;
+};
+
+struct ParsedRegTreeParams {
+  int num_nodes{0};
+  int size_leaf_vector{0};
 };
 
 /*! \brief handler for TreeParam objects from XGBoost schema*/
-class TreeParamHandler : public OutputHandler<int> {
+class TreeParamHandler : public OutputHandler<ParsedRegTreeParams> {
  public:
-  using OutputHandler<int>::OutputHandler;
+  using OutputHandler<ParsedRegTreeParams>::OutputHandler;
 
   bool String(char const* str, std::size_t length, bool copy) override;
 
@@ -380,7 +386,7 @@ class RegTreeHandler : public OutputHandler<treelite::Tree<float, float>> {
   std::vector<int> categories;
   std::vector<double> split_conditions;
   std::vector<bool> default_left;
-  int num_nodes = 0;
+  ParsedRegTreeParams reg_tree_params;
 };
 
 /*! \brief handler for GBTreeModel objects from XGBoost schema*/
@@ -388,6 +394,7 @@ class GBTreeModelHandler : public OutputHandler<ParsedXGBoostModel> {
   using OutputHandler<ParsedXGBoostModel>::OutputHandler;
   bool StartArray() override;
   bool StartObject() override;
+  bool EndObject(std::size_t memberCount) override;
 
  protected:
   bool is_recognized_key(std::string const& key) override;
@@ -421,10 +428,18 @@ class ObjectiveHandler : public OutputHandler<std::string> {
   bool is_recognized_key(std::string const& key) override;
 };
 
+struct ParsedLearnerParams {
+  double base_score;
+  int num_class;
+  int num_feature;
+  std::uint32_t num_target;
+  bool boost_from_average;
+};
+
 /*! \brief handler for LearnerParam objects from XGBoost schema*/
-class LearnerParamHandler : public OutputHandler<treelite::Model> {
+class LearnerParamHandler : public OutputHandler<ParsedLearnerParams> {
  public:
-  using OutputHandler<treelite::Model>::OutputHandler;
+  using OutputHandler<ParsedLearnerParams>::OutputHandler;
   bool String(char const* str, std::size_t length, bool copy) override;
 
  protected:
@@ -443,6 +458,7 @@ class LearnerHandler : public OutputHandler<ParsedXGBoostModel> {
   bool is_recognized_key(std::string const& key) override;
 
  private:
+  ParsedLearnerParams learner_params;
   std::string objective;
 };
 
@@ -463,7 +479,6 @@ class XGBoostModelHandler : public OutputHandler<ParsedXGBoostModel> {
   using OutputHandler<ParsedXGBoostModel>::OutputHandler;
   bool StartArray() override;
   bool StartObject() override;
-  bool EndObject(std::size_t memberCount) override;
 
  protected:
   bool is_recognized_key(std::string const& key) override;
@@ -544,6 +559,6 @@ class DelegatedHandler :
   rapidjson::Document const& handler_config_;
 };
 
-}  // namespace details
-}  // namespace treelite
+}  // namespace treelite::details
+
 #endif  // SRC_FRONTEND_XGBOOST_XGBOOST_JSON_H_

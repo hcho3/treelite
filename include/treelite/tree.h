@@ -232,7 +232,7 @@ class Tree {
   // allocate a new node
   inline int AllocNode();
 
-  friend class GTILBridge;  // bridge to enable optimized access to nodes from GTIL
+  friend class GTILBridge;  // Grant GTIL an optimized access for internals
 
  public:
   /*! \brief number of nodes */
@@ -684,7 +684,7 @@ class Model {
    * This parameter is used only when `pred_transform` is set to "sigmoid".
    * It must be strictly positive; if unspecified, it is set to 1.0.
    */
-  float sigmoid_alpha;
+  float sigmoid_alpha{1.0f};
   /*!
    * \brief Scaling parameter for exponential standard ratio transformation
    * `expstdratio(x) = exp2(-x / c)`
@@ -692,7 +692,7 @@ class Model {
    * This parameter is used only when `pred_transform` is set to "exponential_standard_ratio".
    * If unspecified, it is set to 1.0.
    */
-  float ratio_c;
+  float ratio_c{1.0f};
   /*!
    * \brief Base scores. Expected shape: (num_target, max(num_class))
    *

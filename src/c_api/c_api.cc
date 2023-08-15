@@ -40,6 +40,8 @@ using TreeliteAPIThreadLocalStore = ThreadLocalStore<TreeliteAPIThreadLocalEntry
 
 }  // anonymous namespace
 
+// TODO(hcho3): uncomment
+#if 0
 int TreeliteLoadLightGBMModel(char const* filename, ModelHandle* out) {
   TREELITE_LOG(WARNING) << "TreeliteLoadLightGBMModel() is deprecated. Please use "
                         << "TreeliteLoadLightGBMModelEx() instead.";
@@ -75,6 +77,7 @@ int TreeliteLoadXGBoostJSON(char const* filename, ModelHandle* out) {
                         << "TreeliteLoadXGBoostJSONEx() instead.";
   return TreeliteLoadXGBoostJSONEx(filename, "{}", out);
 }
+#endif
 
 int TreeliteLoadXGBoostJSONEx(char const* filename, char const* config_json, ModelHandle* out) {
   API_BEGIN();
@@ -113,6 +116,8 @@ int TreeliteLoadXGBoostModelFromMemoryBufferEx(
   API_END();
 }
 
+// TODO(hcho3): Uncomment
+#if 0
 int TreeliteLoadLightGBMModelFromString(char const* model_str, ModelHandle* out) {
   TREELITE_LOG(WARNING) << "TreeliteLoadLightGBMModelFromString() is deprecated. Please use "
                         << "TreeliteLoadLightGBMModelFromStringEx() instead.";
@@ -226,6 +231,8 @@ int TreeliteLoadSKLearnHistGradientBoostingClassifier(int n_iter, int n_features
   *out = static_cast<ModelHandle>(model.release());
   API_END();
 }
+
+#endif
 
 int TreeliteSerializeModel(char const* filename, ModelHandle handle) {
   API_BEGIN();

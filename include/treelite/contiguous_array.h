@@ -23,6 +23,10 @@ class ContiguousArray {
   ContiguousArray& operator=(ContiguousArray const&) = delete;
   ContiguousArray(ContiguousArray&& other) noexcept;
   ContiguousArray& operator=(ContiguousArray&& other) noexcept;
+  explicit ContiguousArray(std::vector<T>&& other) noexcept;
+  template <typename InputIt>
+  ContiguousArray(InputIt first, InputIt last) noexcept;
+  ContiguousArray& operator=(std::vector<T>&& other) noexcept;
   inline ContiguousArray Clone() const;
   inline void UseForeignBuffer(void* prealloc_buf, std::size_t size);
   inline T* Data();

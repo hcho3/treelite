@@ -1,5 +1,5 @@
 /*!
- * Copyright (c) 2020-2021 by Contributors
+ * Copyright (c) 2020-2023 by Contributors
  * \file xgboost_json.cc
  * \brief Frontend for xgboost model
  * \author Hyunsu Cho
@@ -218,8 +218,10 @@ bool TreeParamHandler::String(char const* str, std::size_t, bool) {
     return true;
   }
   // Key "num_deleted" deprecated but still present in some xgboost output
-  return (check_cur_key("num_feature") || assign_value("num_nodes", std::stoi(str), output)
-          || check_cur_key("size_leaf_vector") || check_cur_key("num_deleted"));
+  return (check_cur_key("num_feature")
+          || assign_value("num_nodes", std::stoi(str), output.num_nodes)
+          || assign_value("size_leaf_vector", std::stoi(str), output.size_leaf_vector)
+          || check_cur_key("num_deleted"));
 }
 
 bool TreeParamHandler::is_recognized_key(std::string const& key) {
@@ -255,7 +257,7 @@ bool RegTreeHandler::StartObject() {
   if (this->should_ignore_upcoming_value()) {
     return push_handler<IgnoreHandler>();
   }
-  return push_key_handler<TreeParamHandler, int>("tree_param", num_nodes);
+  return push_key_handler<TreeParamHandler, ParsedRegTreeParams>("tree_param", reg_tree_params);
 }
 
 bool RegTreeHandler::Uint(unsigned) {
@@ -267,6 +269,7 @@ bool RegTreeHandler::Uint(unsigned) {
 
 bool RegTreeHandler::EndObject(std::size_t) {
   output.Init();
+  auto const num_nodes = reg_tree_params.num_nodes;
   if (split_type.empty()) {
     split_type.resize(num_nodes, details::xgboost::FeatureType::kNumerical);
   }
@@ -331,7 +334,18 @@ bool RegTreeHandler::EndObject(std::size_t) {
     Q.pop();
 
     if (left_children[old_id] == -1) {
-      output.SetLeaf(new_id, static_cast<float>(split_conditions[old_id]));
+      auto const size_leaf_vector = reg_tree_params.size_leaf_vector;
+      if (size_leaf_vector > 1) {
+        // Vector output
+        std::vector<float> leafvec(size_leaf_vector);
+        std::transform(&base_weights[old_id * size_leaf_vector],
+            &base_weights[(old_id + 1) * size_leaf_vector], leafvec.begin(),
+            [](double e) { return static_cast<float>(e); });
+        output.SetLeafVector(new_id, leafvec);
+      } else {
+        // Scalar leaf output
+        output.SetLeaf(new_id, static_cast<float>(split_conditions[old_id]));
+      }
     } else {
       output.AddChilds(new_id);
       if (split_type[old_id] == details::xgboost::FeatureType::kCategorical) {
@@ -393,6 +407,24 @@ bool GBTreeModelHandler::StartObject() {
   return push_key_handler<IgnoreHandler>("gbtree_model_param");
 }
 
+bool GBTreeModelHandler::EndObject(std::size_t) {
+  // We will assume a well-formed XGBoost model, where all leafs produce an output of identical
+  // dimension. It will slow down parsing if we were to actually check all nodes.
+  auto& trees = std::get<ModelPreset<float, float>>(output.model->variant_).trees;
+  output.size_leaf_vector = 1;
+  for (Tree<float, float> const& tree : trees) {
+    for (int node_id = 0; node_id < tree.num_nodes; ++node_id) {
+      if (tree.IsLeaf(node_id)) {
+        if (tree.HasLeafVector(node_id)) {
+          output.size_leaf_vector = static_cast<int>(tree.LeafVector(node_id).size());
+        }
+        break;
+      }
+    }
+  }
+  return pop_handler();
+}
+
 bool GBTreeModelHandler::is_recognized_key(std::string const& key) {
   return (key == "trees" || key == "tree_info" || key == "gbtree_model_param");
 }
@@ -441,10 +473,12 @@ bool GradientBoosterHandler::StartArray() {
 
 bool GradientBoosterHandler::EndObject([[maybe_unused]] std::size_t memberCount) {
   if (name == "dart" && !weight_drop.empty()) {
+    TREELITE_CHECK_EQ(output.size_leaf_vector, 1)
+        << "Dart with vector-leaf output is not yet supported";
     // Fold weight drop into leaf value for dart models.
     auto& trees = std::get<ModelPreset<float, float>>(output.model->variant_).trees;
     TREELITE_CHECK_EQ(trees.size(), weight_drop.size());
-    for (size_t i = 0; i < trees.size(); ++i) {
+    for (std::size_t i = 0; i < trees.size(); ++i) {
       for (int nid = 0; nid < trees[i].num_nodes; ++nid) {
         if (trees[i].IsLeaf(nid)) {
           trees[i].SetLeaf(nid, static_cast<float>(weight_drop[i] * trees[i].LeafValue(nid)));
@@ -499,20 +533,14 @@ bool LearnerParamHandler::String(char const* str, std::size_t, bool) {
   if (this->should_ignore_upcoming_value()) {
     return true;
   }
-  int num_target = 1;
-  if (assign_value("num_target", std::stoi(str), num_target)) {
-    if (num_target != 1) {
-      TREELITE_LOG(ERROR)
-          << "num_target must be 1; Treelite doesn't support multi-target regressor yet";
-      return false;
-    }
-    return true;
-  }
-  return (assign_value("base_score", strtof(str, nullptr), output.param.global_bias)
-          || assign_value("num_class", static_cast<unsigned int>(std::max(std::stoi(str), 1)),
-              output.task_param.num_class)
-          || assign_value("num_feature", std::stoi(str), output.num_feature)
-          || check_cur_key("boost_from_average"));
+  // For now, XGBoost always outputs a scalar base_score
+  return (
+      assign_value("base_score", std::strtod(str, nullptr), output.base_score)
+      || assign_value("num_class", std::max(std::stoi(str), 1), output.num_class)
+      || assign_value("num_target", static_cast<std::uint32_t>(std::stoi(str)), output.num_target)
+      || assign_value("num_feature", std::stoi(str), output.num_feature)
+      || assign_value(
+          "boost_from_average", static_cast<bool>(std::stoi(str)), output.boost_from_average));
 }
 
 bool LearnerParamHandler::is_recognized_key(std::string const& key) {
@@ -529,15 +557,97 @@ bool LearnerHandler::StartObject() {
   }
   // "attributes" key is not documented in schema
   return (
-      push_key_handler<LearnerParamHandler, treelite::Model>("learner_model_param", *output.model)
+      push_key_handler<LearnerParamHandler, ParsedLearnerParams>(
+          "learner_model_param", learner_params)
       || push_key_handler<GradientBoosterHandler, ParsedXGBoostModel>("gradient_booster", output)
       || push_key_handler<ObjectiveHandler, std::string>("objective", objective)
       || push_key_handler<IgnoreHandler>("attributes"));
 }
 
 bool LearnerHandler::EndObject(std::size_t) {
-  xgboost::SetPredTransform(objective, &output.model->param);
+  auto const num_tree = static_cast<std::int32_t>(output.model->GetNumTree());
+
+  output.model->num_feature = learner_params.num_feature;
+  output.model->average_tree_output = false;
+
+  // For now, XGBoost always outputs a scalar base_score
+  output.model->base_scores.Resize(1);
+  output.model->base_scores[0] = learner_params.base_score;
+
+  output.model->num_target = learner_params.num_target;
+
+  // Save the objective name
+  std::string pred_transform = xgboost::GetPredTransform(objective);
+  output.model->pred_transform
+      = ContiguousArray<char>(pred_transform.begin(), pred_transform.end());
   output.objective_name = objective;
+
+  if (learner_params.num_class > 1) {  // multi-class classifier
+    // For now, XGBoost does not support multi-target models for multi-class classification
+    // So if num_class > 1, we can assume num_target == 1
+    TREELITE_CHECK(learner_params.num_target == 1)
+        << "XGBoost does not support multi-target models for multi-class classification";
+    output.model->task_type = TaskType::kMultiClf;
+    output.model->target_id.Resize(num_tree);
+    std::fill_n(output.model->target_id.Data(), num_tree, 0);
+
+    output.model->class_id.Resize(num_tree);
+    if (output.size_leaf_vector > 1) {
+      // Vector-leaf output
+      std::fill_n(output.model->class_id.Data(), num_tree, -1);
+    } else {
+      // Grove per class: i-th tree produces output for class (i % num_class)
+      for (std::int32_t tree_id = 0; tree_id < num_tree; ++tree_id) {
+        // Validate tree_info
+        auto const grove_id = static_cast<std::int32_t>(output.tree_info[tree_id]);
+        auto const expected_grove_id
+            = tree_id % static_cast<std::int32_t>(learner_params.num_class);
+        TREELITE_CHECK_EQ(grove_id, expected_grove_id)
+            << "tree_info for Tree " << tree_id << " is not valid! "
+            << "Expected: " << expected_grove_id << ", Got: " << grove_id;
+        output.model->class_id[tree_id] = grove_id;
+      }
+    }
+    output.model->leaf_vector_shape
+        = std::vector<std::uint32_t>{1, static_cast<std::uint32_t>(output.size_leaf_vector)};
+  } else {
+    // binary classifier or regressor
+    if (output.objective_name.rfind("binary:", 0) == 0) {
+      output.model->task_type = TaskType::kBinaryClf;
+    } else {
+      output.model->task_type = TaskType::kRegressor;
+    }
+    const std::uint32_t num_target = output.model->num_target;
+    output.model->class_id.Resize(num_tree);
+    std::fill_n(output.model->class_id.Data(), num_tree, 0);
+    output.model->target_id.Resize(num_tree);
+    if (output.size_leaf_vector > 1) {
+      // Vector-leaf output
+      std::fill_n(output.model->target_id.Data(), num_tree, -1);
+    } else {
+      // Grove per target: i-th tree produces output for target (i % num_target)
+      for (std::int32_t tree_id = 0; tree_id < num_tree; ++tree_id) {
+        // Validate tree_info
+        auto const grove_id = static_cast<std::uint32_t>(output.tree_info[tree_id]);
+        auto const expected_grove_id = static_cast<std::uint32_t>(tree_id) % num_target;
+        TREELITE_CHECK_EQ(grove_id, expected_grove_id)
+            << "tree_info for Tree " << tree_id << " is not valid! "
+            << "Expected: " << expected_grove_id << ", Got: " << grove_id;
+        output.model->target_id[tree_id] = static_cast<std::int32_t>(grove_id);
+      }
+    }
+  }
+  // Before XGBoost 1.0.0, the base score saved in model is a transformed value.  After
+  // 1.0 it's the original value provided by user.
+  bool const need_transform_to_margin = output.version.empty() || output.version[0] >= 1;
+  if (need_transform_to_margin) {
+    learner_params.base_score = treelite::details::xgboost::TransformBaseScoreToMargin(
+        pred_transform, learner_params.base_score);
+  }
+  // For now, XGBoost produces a scalar base_score
+  output.model->base_scores.Resize(1);
+  output.model->base_scores[0] = learner_params.base_score;
+
   return pop_handler();
 }
 
@@ -593,32 +703,6 @@ bool XGBoostModelHandler::StartObject() {
   return (push_key_handler<LearnerHandler, ParsedXGBoostModel>("learner", output)
           || push_key_handler<IgnoreHandler>("Config")
           || push_key_handler<XGBoostCheckpointHandler, ParsedXGBoostModel>("Model", output));
-}
-
-bool XGBoostModelHandler::EndObject([[maybe_unused]] std::size_t memberCount) {
-  output.model->average_tree_output = false;
-  output.model->task_param.output_type = TaskParam::OutputType::kFloat;
-  output.model->task_param.leaf_vector_size = 1;
-  if (output.model->task_param.num_class > 1) {
-    // multi-class classifier
-    output.model->task_type = TaskType::kMultiClf;
-    output.model->task_param.grove_per_class = true;
-  } else {
-    // binary classifier or regressor
-    if (output.objective_name.rfind("binary:", 0) == 0) {
-      output.model->task_type = TaskType::kBinaryClf;
-    } else {
-      output.model->task_type = TaskType::kRegressor;
-    }
-    output.model->task_param.grove_per_class = false;
-  }
-  // Before XGBoost 1.0.0, the global bias saved in model is a transformed value.  After
-  // 1.0 it's the original value provided by user.
-  bool const need_transform_to_margin = output.version.empty() || output.version[0] >= 1;
-  if (need_transform_to_margin) {
-    treelite::details::xgboost::TransformGlobalBiasToMargin(&output.model->param);
-  }
-  return pop_handler();
 }
 
 bool XGBoostModelHandler::is_recognized_key(std::string const& key) {
@@ -706,7 +790,7 @@ std::unique_ptr<treelite::Model> ParseStream(std::unique_ptr<StreamType> input_s
   treelite::details::ParsedXGBoostModel parsed = handler->get_result();
 
   // Special handling for multi-class classifier with num_parallel_tree > 1
-  if (parsed.model->task_param.grove_per_class && parsed.model->task_param.num_class > 2) {
+  if (parsed.model->num_class[0] > 2) {  // Assume grove-per-class, num_target == 1
     // Infer num_parallel_tree
     unsigned num_parallel_tree = 0;
     for (int e : parsed.tree_info) {

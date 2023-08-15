@@ -9,8 +9,10 @@
 
 #include <treelite/logging.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstring>
+#include <iterator>
 #include <vector>
 
 namespace treelite {
@@ -51,6 +53,27 @@ ContiguousArray<T>& ContiguousArray<T>::operator=(ContiguousArray&& other) noexc
 }
 
 template <typename T>
+ContiguousArray<T>::ContiguousArray(std::vector<T>&& other) noexcept
+    : ContiguousArray(other.begin(), other.end()) {}
+
+template <typename T>
+template <typename InputIt>
+ContiguousArray<T>::ContiguousArray(InputIt first, InputIt last) noexcept {
+  size_ = std::distance(first, last);
+  capacity_ = size_;
+  owned_buffer_ = true;
+  buffer_ = static_cast<T*>(std::malloc(sizeof(T) * capacity_));
+  std::copy(first, last, buffer_);
+}
+
+template <typename T>
+ContiguousArray<T>& ContiguousArray<T>::operator=(std::vector<T>&& other) noexcept {
+  Resize(other.size());
+  std::copy(other.begin(), other.end(), buffer_);
+  return *this;
+}
+
+template <typename T>
 inline ContiguousArray<T> ContiguousArray<T>::Clone() const {
   ContiguousArray clone;
   if (buffer_) {
@@ -58,7 +81,7 @@ inline ContiguousArray<T> ContiguousArray<T>::Clone() const {
     if (!clone.buffer_) {
       throw Error("Could not allocate memory for the clone");
     }
-    std::memcpy(clone.buffer_, buffer_, sizeof(T) * size_);
+    std::copy_n(buffer_, size_, clone.buffer_);
   } else {
     TREELITE_CHECK_EQ(size_, 0);
     TREELITE_CHECK_EQ(capacity_, 0);
@@ -202,7 +225,7 @@ inline void ContiguousArray<T>::Extend(std::vector<T> const& other) {
     }
     Reserve(newcapacity);
   }
-  std::memcpy(&buffer_[size_], static_cast<void const*>(other.data()), sizeof(T) * other.size());
+  std::copy_n(other.begin(), other.size(), &buffer_[size_]);
   size_ = newsize;
 }
 
@@ -226,7 +249,7 @@ inline void ContiguousArray<T>::Extend(ContiguousArray<T> const& other) {
     }
     Reserve(newcapacity);
   }
-  std::memcpy(&buffer_[size_], static_cast<void const*>(other.Data()), sizeof(T) * other.Size());
+  std::copy_n(other.Data(), other.Size(), &buffer_[size_]);
   size_ = newsize;
 }
 
