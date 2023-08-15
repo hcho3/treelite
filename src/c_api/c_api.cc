@@ -9,7 +9,7 @@
 #include <treelite/c_api_error.h>
 #include <treelite/data.h>
 #include <treelite/frontend.h>
-#include <treelite/gtil.h>
+// #include <treelite/gtil.h>
 #include <treelite/logging.h>
 #include <treelite/math.h>
 #include <treelite/thread_local.h>
@@ -312,6 +312,7 @@ int TreeliteFreeModel(ModelHandle handle) {
   API_END();
 }
 
+#if 0
 int TreeliteGTILParseConfig(char const* config_json, GTILConfigHandle* out) {
   API_BEGIN();
   auto parsed_config = std::make_unique<gtil::Configuration>(config_json);
@@ -373,6 +374,7 @@ int TreeliteGTILPredictEx(ModelHandle model, float const* input, size_t num_row,
   *out_result_shape = pred_shape.data();
   API_END();
 }
+#endif  // comment out GTIL
 
 int TreeliteQueryNumTree(ModelHandle handle, size_t* out) {
   API_BEGIN();
@@ -388,12 +390,13 @@ int TreeliteQueryNumFeature(ModelHandle handle, size_t* out) {
   API_END();
 }
 
-int TreeliteQueryNumClass(ModelHandle handle, size_t* out) {
+// TODO(hcho3): uncomment
+/*int TreeliteQueryNumClass(ModelHandle handle, size_t* out) {
   API_BEGIN();
   auto const* model_ = static_cast<Model const*>(handle);
   *out = static_cast<size_t>(model_->task_param.num_class);
   API_END();
-}
+}*/
 
 int TreeliteSetTreeLimit(ModelHandle handle, size_t limit) {
   API_BEGIN();

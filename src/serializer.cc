@@ -98,9 +98,15 @@ class Serializer {
     mixin_->SerializePrimitiveField(&model.num_feature);
     mixin_->SerializePrimitiveField(&model.task_type);
     mixin_->SerializePrimitiveField(&model.average_tree_output);
-    mixin_->SerializeCompositeField(&model.task_param, "T{=B=?xx=I=I}");
-    mixin_->SerializeCompositeField(
-        &model.param, "T{" _TREELITE_STR(TREELITE_MAX_PRED_TRANSFORM_LENGTH) "s=f=f=f}");
+    mixin_->SerializePrimitiveField(&model.num_target);
+    mixin_->SerializePrimitiveArray(&model.num_class);
+    mixin_->SerializePrimitiveArray(&model.leaf_vector_shape);
+    mixin_->SerializePrimitiveArray(&model.target_id);
+    mixin_->SerializePrimitiveArray(&model.class_id);
+    mixin_->SerializePrimitiveArray(&model.pred_transform);
+    mixin_->SerializePrimitiveField(&model.sigmoid_alpha);
+    mixin_->SerializePrimitiveField(&model.ratio_c);
+    mixin_->SerializePrimitiveArray(&model.base_scores);
 
     /* Extension Slot 1: Per-model optional fields -- to be added later */
     model.num_opt_field_per_model_ = 0;
@@ -130,6 +136,14 @@ class Serializer {
     mixin_->SerializePrimitiveArray(&tree.leaf_vector_end_);
     mixin_->SerializePrimitiveArray(&tree.matching_categories_);
     mixin_->SerializePrimitiveArray(&tree.matching_categories_offset_);
+
+    /* Node statistics */
+    mixin_->SerializePrimitiveArray(&tree.data_count_);
+    mixin_->SerializePrimitiveArray(&tree.data_count_present_);
+    mixin_->SerializePrimitiveArray(&tree.sum_hess_);
+    mixin_->SerializePrimitiveArray(&tree.sum_hess_present_);
+    mixin_->SerializePrimitiveArray(&tree.gain_);
+    mixin_->SerializePrimitiveArray(&tree.gain_present_);
 
     /* Extension slot 2: Per-tree optional fields -- to be added later */
     tree.num_opt_field_per_tree_ = 0;
@@ -238,8 +252,15 @@ class Deserializer {
     mixin_->DeserializePrimitiveField(&model->num_feature);
     mixin_->DeserializePrimitiveField(&model->task_type);
     mixin_->DeserializePrimitiveField(&model->average_tree_output);
-    mixin_->DeserializeCompositeField(&model->task_param);
-    mixin_->DeserializeCompositeField(&model->param);
+    mixin_->DeserializePrimitiveField(&model->num_target);
+    mixin_->DeserializePrimitiveArray(&model->num_class);
+    mixin_->DeserializePrimitiveArray(&model->leaf_vector_shape);
+    mixin_->DeserializePrimitiveArray(&model->target_id);
+    mixin_->DeserializePrimitiveArray(&model->class_id);
+    mixin_->DeserializePrimitiveArray(&model->pred_transform);
+    mixin_->DeserializePrimitiveField(&model->sigmoid_alpha);
+    mixin_->DeserializePrimitiveField(&model->ratio_c);
+    mixin_->DeserializePrimitiveArray(&model->base_scores);
 
     /* Extension Slot 1: Per-model optional fields -- to be added later */
     bool const use_opt_field = (major_ver >= 3);
@@ -257,32 +278,63 @@ class Deserializer {
   }
 
   void DeserializeTrees(Model& model) {
-    std::visit(
-        [&](auto&& concrete_model) {
-          concrete_model.trees.clear();
-          for (std::uint64_t i = 0; i < model.num_tree_; ++i) {
-            concrete_model.trees.emplace_back();
-            DeserializeTree(concrete_model.trees.back());
-          }
-        },
-        model.variant_);
-  }
-
-  void DeserializeTreesV3(Model& model) {
-    std::visit(
-        [&](auto&& concrete_model) {
-          concrete_model.trees.clear();
-          for (std::uint64_t i = 0; i < model.num_tree_; ++i) {
-            concrete_model.trees.emplace_back();
-            DeserializeTreeV3(concrete_model.trees.back());
-          }
-        },
-        model.variant_);
+    if (model.major_ver_ == 3) {
+      std::visit(
+          [&](auto&& concrete_model) {
+            concrete_model.trees.clear();
+            for (std::uint64_t i = 0; i < model.num_tree_; ++i) {
+              concrete_model.trees.emplace_back();
+              DeserializeTreeV3(concrete_model.trees.back());
+            }
+          },
+          model.variant_);
+    } else {
+      std::visit(
+          [&](auto&& concrete_model) {
+            concrete_model.trees.clear();
+            for (std::uint64_t i = 0; i < model.num_tree_; ++i) {
+              concrete_model.trees.emplace_back();
+              DeserializeTree(concrete_model.trees.back());
+            }
+          },
+          model.variant_);
+    }
   }
 
   template <typename ThresholdType, typename LeafOutputType>
   void DeserializeTree(Tree<ThresholdType, LeafOutputType>& tree) {
-    // TODO(hcho3): Implement v4 protocol
+    mixin_->DeserializePrimitiveField(&tree.num_nodes);
+    mixin_->DeserializePrimitiveField(&tree.has_categorical_split_);
+    mixin_->DeserializeCompositeArray(&tree.nodes_);
+    TREELITE_CHECK_EQ(static_cast<std::size_t>(tree.num_nodes), tree.nodes_.Size())
+        << "Could not load the correct number of nodes";
+    mixin_->DeserializePrimitiveArray(&tree.leaf_vector_);
+    mixin_->DeserializePrimitiveArray(&tree.leaf_vector_begin_);
+    mixin_->DeserializePrimitiveArray(&tree.leaf_vector_end_);
+    mixin_->DeserializePrimitiveArray(&tree.matching_categories_);
+    mixin_->DeserializePrimitiveArray(&tree.matching_categories_offset_);
+
+    /* Node statistics */
+    mixin_->DeserializePrimitiveArray(&tree.data_count_);
+    mixin_->DeserializePrimitiveArray(&tree.data_count_present_);
+    mixin_->DeserializePrimitiveArray(&tree.sum_hess_);
+    mixin_->DeserializePrimitiveArray(&tree.sum_hess_present_);
+    mixin_->DeserializePrimitiveArray(&tree.gain_);
+    mixin_->DeserializePrimitiveArray(&tree.gain_present_);
+
+    /* Extension slot 2: Per-tree optional fields -- to be added later */
+    mixin_->DeserializePrimitiveField(&tree.num_opt_field_per_tree_);
+    // Ignore extra fields; the input is likely from a later version of Treelite
+    for (std::int32_t i = 0; i < tree.num_opt_field_per_tree_; ++i) {
+      mixin_->SkipOptionalField();
+    }
+
+    /* Extension slot 3: Per-node optional fields -- to be added later */
+    mixin_->DeserializePrimitiveField(&tree.num_opt_field_per_node_);
+    // Ignore extra fields; the input is likely from a later version of Treelite
+    for (std::int32_t i = 0; i < tree.num_opt_field_per_node_; ++i) {
+      mixin_->SkipOptionalField();
+    }
   }
 
   template <typename ThresholdType, typename LeafOutputType>
@@ -300,16 +352,16 @@ class Deserializer {
     mixin_->DeserializePrimitiveArray(&tree.matching_categories_);
     mixin_->DeserializePrimitiveArray(&tree.matching_categories_offset_);
 
-    /* Extension slot 2: Per-tree optional fields -- to be added later */
+    /* Extension slot 2: Per-tree optional fields -- not used */
     mixin_->DeserializePrimitiveField(&tree.num_opt_field_per_tree_);
-    // Ignore extra fields; the input is likely from a later version of Treelite
+    // Ignore extra fields
     for (std::int32_t i = 0; i < tree.num_opt_field_per_tree_; ++i) {
       mixin_->SkipOptionalField();
     }
 
-    /* Extension slot 3: Per-node optional fields -- to be added later */
+    /* Extension slot 3: Per-node optional fields -- not used */
     mixin_->DeserializePrimitiveField(&tree.num_opt_field_per_node_);
-    // Ignore extra fields; the input is likely from a later version of Treelite
+    // Ignore extra fields
     for (std::int32_t i = 0; i < tree.num_opt_field_per_node_; ++i) {
       mixin_->SkipOptionalField();
     }
@@ -349,11 +401,7 @@ std::unique_ptr<Model> Model::DeserializeFromStream(std::istream& is) {
   auto mixin = std::make_shared<detail::serializer::StreamDeserializerMixIn>(is);
   detail::serializer::Deserializer<detail::serializer::StreamDeserializerMixIn> deserializer{mixin};
   std::unique_ptr<Model> model = deserializer.DeserializeHeaderAndCreateModel();
-  if (model->GetVersion().major_ver == 3) {
-    deserializer.DeserializeTreesV3(*model);
-  } else {
-    deserializer.DeserializeTrees(*model);
-  }
+  deserializer.DeserializeTrees(*model);
   return model;
 }
 

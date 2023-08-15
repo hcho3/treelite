@@ -1,5 +1,5 @@
 /*!
- * Copyright (c) 2017-2020 by Contributors
+ * Copyright (c) 2017-2023 by Contributors
  * \file typeinfo.h
  * \brief Defines TypeInfo class and utilities
  * \author Hyunsu Cho
@@ -21,8 +21,8 @@
 namespace treelite {
 
 /*! \brief Types used by thresholds and leaf outputs */
-enum class TypeInfo : uint8_t { kInvalid = 0, kUInt32 = 1, kFloat32 = 2, kFloat64 = 3 };
-static_assert(std::is_same<std::underlying_type<TypeInfo>::type, uint8_t>::value,
+enum class TypeInfo : std::uint8_t { kInvalid = 0, kUInt32 = 1, kFloat32 = 2, kFloat64 = 3 };
+static_assert(std::is_same<std::underlying_type<TypeInfo>::type, std::uint8_t>::value,
     "TypeInfo must use uint8_t as underlying type");
 
 /*! \brief conversion table from string to TypeInfo, defined in tables.cc */
@@ -56,7 +56,7 @@ inline std::string TypeInfoToString(treelite::TypeInfo type) {
  */
 template <typename T>
 inline TypeInfo TypeToInfo() {
-  if (std::is_same<T, uint32_t>::value) {
+  if (std::is_same<T, std::uint32_t>::value) {
     return TypeInfo::kUInt32;
   } else if (std::is_same<T, float>::value) {
     return TypeInfo::kFloat32;

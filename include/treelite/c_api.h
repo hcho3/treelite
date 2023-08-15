@@ -417,7 +417,8 @@ TREELITE_DLL int TreeliteQueryNumFeature(ModelHandle handle, size_t* out);
  * \param out number of output groups
  * \return 0 for success, -1 for failure
  */
-TREELITE_DLL int TreeliteQueryNumClass(ModelHandle handle, size_t* out);
+/* TODO(hcho3): uncomment
+TREELITE_DLL int TreeliteQueryNumClass(ModelHandle handle, size_t* out); */
 
 /*!
  * \brief keep first N trees of model, limit must smaller than number of trees.

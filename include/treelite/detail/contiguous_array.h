@@ -207,6 +207,30 @@ inline void ContiguousArray<T>::Extend(std::vector<T> const& other) {
 }
 
 template <typename T>
+inline void ContiguousArray<T>::Extend(ContiguousArray<T> const& other) {
+  if (!owned_buffer_) {
+    throw Error("Cannot add elements when using a foreign buffer; clone first");
+  }
+  if (other.Empty()) {
+    return;  // appending an empty vector is a no-op
+  }
+
+  std::size_t newsize = size_ + other.Size();
+  if (newsize > capacity_) {
+    std::size_t newcapacity = capacity_;
+    if (newcapacity == 0) {
+      newcapacity = 1;
+    }
+    while (newcapacity <= newsize) {
+      newcapacity *= 2;
+    }
+    Reserve(newcapacity);
+  }
+  std::memcpy(&buffer_[size_], static_cast<void const*>(other.Data()), sizeof(T) * other.Size());
+  size_ = newsize;
+}
+
+template <typename T>
 inline T& ContiguousArray<T>::operator[](std::size_t idx) {
   return buffer_[idx];
 }

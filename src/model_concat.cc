@@ -25,7 +25,9 @@ std::unique_ptr<Model> ConcatenateModelObjects(std::vector<Model const*> const& 
       [&objs, threshold_type, leaf_output_type](auto&& first_model_obj) {
         using ModelType = std::remove_const_t<std::remove_reference_t<decltype(first_model_obj)>>;
         std::unique_ptr<Model> concatenated_model = Model::Create(threshold_type, leaf_output_type);
-        ModelType& concatenated_model_concrete = std::get<ModelType>(concatenated_model->variant_);
+        auto& concatenated_model_concrete = std::get<ModelType>(concatenated_model->variant_);
+        concatenated_model->target_id.Clear();
+        concatenated_model->class_id.Clear();
         for (std::size_t i = 0; i < objs.size(); ++i) {
           if (!std::holds_alternative<ModelType>(objs[i]->variant_)) {
             TREELITE_LOG(FATAL) << "Model object at index " << i
@@ -35,13 +37,17 @@ std::unique_ptr<Model> ConcatenateModelObjects(std::vector<Model const*> const& 
           std::transform(casted.trees.begin(), casted.trees.end(),
               std::back_inserter(concatenated_model_concrete.trees),
               [](const auto& tree) { return tree.Clone(); });
+          concatenated_model->target_id.Extend(objs[i]->target_id);
+          concatenated_model->class_id.Extend(objs[i]->class_id);
         }
         /* Copy model metadata */
         concatenated_model->num_feature = objs[0]->num_feature;
         concatenated_model->task_type = objs[0]->task_type;
         concatenated_model->average_tree_output = objs[0]->average_tree_output;
-        concatenated_model->task_param = objs[0]->task_param;
-        concatenated_model->param = objs[0]->param;
+        concatenated_model->num_target = objs[0]->num_target;
+        concatenated_model->num_class = objs[0]->num_class.Clone();
+        concatenated_model->leaf_vector_shape = objs[0]->leaf_vector_shape.Clone();
+        concatenated_model->base_scores = objs[0]->base_scores.Clone();
         return concatenated_model;
       },
       objs[0]->variant_);

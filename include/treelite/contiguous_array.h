@@ -39,6 +39,7 @@ class ContiguousArray {
   inline void Clear();
   inline void PushBack(T t);
   inline void Extend(std::vector<T> const& other);
+  inline void Extend(ContiguousArray const& other);
   /* Unsafe access, no bounds checking */
   inline T& operator[](std::size_t idx);
   inline T const& operator[](std::size_t idx) const;

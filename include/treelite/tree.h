@@ -1,5 +1,5 @@
 /*!
- * Copyright (c) 2017-2021 by Contributors
+ * Copyright (c) 2017-2023 by Contributors
  * \file tree.h
  * \brief model structure for tree ensemble
  * \author Hyunsu Cho
@@ -149,8 +149,8 @@ class Tree {
   static_assert(std::is_same<ThresholdType, LeafOutputType>::value
                     || std::is_same<LeafOutputType, uint32_t>::value,
       "Unsupported combination of ThresholdType and LeafOutputType");
-  static_assert((std::is_same<ThresholdType, float>::value && sizeof(Node) == 48)
-                    || (std::is_same<ThresholdType, double>::value && sizeof(Node) == 56),
+  static_assert((std::is_same<ThresholdType, float>::value && sizeof(Node) == 20)
+                    || (std::is_same<ThresholdType, double>::value && sizeof(Node) == 32),
       "Node size incorrect");
 
   Tree() = default;
@@ -363,14 +363,14 @@ class Tree {
    * \param nid ID of node being queried
    */
   inline bool HasDataCount(int nid) const {
-    return nodes_[nid].HasDataCount();
+    return data_count_present_[nid];
   }
   /*!
    * \brief get data count
    * \param nid ID of node being queried
    */
   inline std::uint64_t DataCount(int nid) const {
-    return nodes_[nid].DataCount();
+    return data_count_[nid];
   }
 
   /*!
@@ -378,28 +378,28 @@ class Tree {
    * \param nid ID of node being queried
    */
   inline bool HasSumHess(int nid) const {
-    return nodes_[nid].HasSumHess();
+    return sum_hess_present_[nid];
   }
   /*!
    * \brief get hessian sum
    * \param nid ID of node being queried
    */
   inline double SumHess(int nid) const {
-    return nodes_[nid].SumHess();
+    return sum_hess_[nid];
   }
   /*!
    * \brief test whether this node has gain value
    * \param nid ID of node being queried
    */
   inline bool HasGain(int nid) const {
-    return nodes_[nid].HasGain();
+    return gain_present_[nid];
   }
   /*!
    * \brief get gain value
    * \param nid ID of node being queried
    */
   inline double Gain(int nid) const {
-    return nodes_[nid].Gain();
+    return gain_[nid];
   }
   /*!
    * \brief test whether the list given by MatchingCategories(nid) is associated with the right
@@ -442,7 +442,7 @@ class Tree {
    *                                    (false)
    */
   inline void SetCategoricalSplit(int nid, unsigned split_index, bool default_left,
-      std::vector<uint32_t> const& categories_list, bool categories_list_right_child);
+      std::vector<std::uint32_t> const& categories_list, bool categories_list_right_child);
   /*!
    * \brief set the leaf value of the node
    * \param nid ID of node being updated
@@ -461,19 +461,17 @@ class Tree {
    * \param sum_hess hessian sum
    */
   inline void SetSumHess(int nid, double sum_hess) {
-    Node& node = nodes_.at(nid);
-    node.sum_hess_ = sum_hess;
-    node.sum_hess_present_ = true;
+    sum_hess_.at(nid) = sum_hess;
+    sum_hess_present_.at(nid) = true;
   }
   /*!
    * \brief set the data count of the node
    * \param nid ID of node being updated
    * \param data_count data count
    */
-  inline void SetDataCount(int nid, uint64_t data_count) {
-    Node& node = nodes_.at(nid);
-    node.data_count_ = data_count;
-    node.data_count_present_ = true;
+  inline void SetDataCount(int nid, std::uint64_t data_count) {
+    data_count_.at(nid) = data_count;
+    data_count_present_.at(nid) = true;
   }
   /*!
    * \brief set the gain value of the node
@@ -481,9 +479,8 @@ class Tree {
    * \param gain gain value
    */
   inline void SetGain(int nid, double gain) {
-    Node& node = nodes_.at(nid);
-    node.gain_ = gain;
-    node.gain_present_ = true;
+    gain_.at(nid) = gain;
+    gain_present_.at(nid) = true;
   }
 };
 
@@ -679,7 +676,7 @@ class Model {
    * \snippet src/compiler/pred_transform.cc pred_transform_db
    *
    */
-  std::string pred_transform;
+  ContiguousArray<char> pred_transform;
   /*!
    * \brief Scaling parameter for sigmoid function
    * `sigmoid(x) = 1 / (1 + exp(-alpha * x))`

@@ -445,7 +445,9 @@ inline std::unique_ptr<treelite::Model> ParseStream(std::istream& fi) {
   model->leaf_vector_shape[1] = 1;
 
   // Set correct prediction transform function, depending on objective function
-  model->pred_transform = treelite::details::xgboost::GetPredTransform(name_obj_);
+  std::string pred_transform = treelite::details::xgboost::GetPredTransform(name_obj_);
+  model->pred_transform.Resize(pred_transform.length());
+  std::copy(pred_transform.begin(), pred_transform.end(), model->pred_transform.Data());
 
   // Set base scores
   auto base_score = static_cast<double>(mparam_.base_score);
@@ -453,8 +455,7 @@ inline std::unique_ptr<treelite::Model> ParseStream(std::istream& fi) {
   // 1.0 it's the original value provided by user.
   bool const need_transform_to_margin = mparam_.major_version >= 1;
   if (need_transform_to_margin) {
-    base_score
-        = treelite::details::xgboost::TransformBaseScoreToMargin(model->pred_transform, base_score);
+    base_score = treelite::details::xgboost::TransformBaseScoreToMargin(pred_transform, base_score);
   }
   model->base_scores.Resize(1);
   model->base_scores[0] = base_score;

@@ -1,5 +1,5 @@
 /*!
- * Copyright (c) 2020-2021 by Contributors
+ * Copyright (c) 2020-2023 by Contributors
  * \file json_serializer.cc
  * \brief Reference serializer implementation, which serializes to JSON. This is useful for testing
  *        correctness of the binary serializer
@@ -9,6 +9,7 @@
 #include <rapidjson/ostreamwrapper.h>
 #include <rapidjson/prettywriter.h>
 #include <rapidjson/writer.h>
+#include <treelite/contiguous_array.h>
 #include <treelite/logging.h>
 #include <treelite/tree.h>
 
@@ -20,15 +21,30 @@
 namespace {
 
 template <typename WriterType, typename T,
-    typename std::enable_if<std::is_integral<T>::value, bool>::type = true>
+    typename std::enable_if<std::is_integral_v<T> && std::is_unsigned_v<T>, bool>::type = true>
 void WriteElement(WriterType& writer, T e) {
-  writer.Uint64(static_cast<uint64_t>(e));
+  writer.Uint64(static_cast<std::uint64_t>(e));
 }
 
 template <typename WriterType, typename T,
-    typename std::enable_if<std::is_floating_point<T>::value, bool>::type = true>
+    typename std::enable_if<std::is_integral_v<T> && std::is_signed_v<T>, bool>::type = true>
+void WriteElement(WriterType& writer, T e) {
+  writer.Int64(static_cast<std::int64_t>(e));
+}
+
+template <typename WriterType, typename T,
+    typename std::enable_if<std::is_floating_point_v<T>, bool>::type = true>
 void WriteElement(WriterType& writer, T e) {
   writer.Double(static_cast<double>(e));
+}
+
+template <typename WriterType, typename T>
+void WriteArray(WriterType& writer, treelite::ContiguousArray<T> const& array) {
+  writer.StartArray();
+  for (std::size_t i = 0; i < array.Size(); ++i) {
+    WriteElement(writer, array[i]);
+  }
+  writer.EndArray();
 }
 
 template <typename WriterType>
@@ -72,7 +88,7 @@ void WriteNode(
       writer.Bool(tree.CategoriesListRightChild(node_id));
       writer.Key("categories_list");
       writer.StartArray();
-      for (uint32_t e : tree.MatchingCategories(node_id)) {
+      for (std::uint32_t e : tree.MatchingCategories(node_id)) {
         writer.Uint(e);
       }
       writer.EndArray();
@@ -99,35 +115,33 @@ void WriteNode(
 }
 
 template <typename WriterType>
-void SerializeTaskParamToJSON(WriterType& writer, treelite::TaskParam task_param) {
-  writer.StartObject();
-
-  writer.Key("output_type");
-  WriteString(writer, treelite::OutputTypeToString(task_param.output_type));
-  writer.Key("grove_per_class");
-  writer.Bool(task_param.grove_per_class);
+void SerializeTaskParametersToJSON(WriterType& writer, treelite::Model const& model) {
+  writer.Key("num_target");
+  writer.Uint(model.num_target);
   writer.Key("num_class");
-  writer.Uint(task_param.num_class);
-  writer.Key("leaf_vector_size");
-  writer.Uint(task_param.leaf_vector_size);
-
-  writer.EndObject();
+  WriteArray(writer, model.num_class);
+  writer.Key("leaf_vector_shape");
+  WriteArray(writer, model.leaf_vector_shape);
 }
 
 template <typename WriterType>
-void SerializeModelParamToJSON(WriterType& writer, treelite::ModelParam model_param) {
-  writer.StartObject();
+void SerializePerTreeMetadataToJSON(WriterType& writer, treelite::Model const& model) {
+  writer.Key("target_id");
+  WriteArray(writer, model.target_id);
+  writer.Key("class_id");
+  WriteArray(writer, model.class_id);
+}
 
+template <typename WriterType>
+void SerializeModelParametersToJSON(WriterType& writer, treelite::Model const& model) {
   writer.Key("pred_transform");
-  WriteString(writer, std::string(model_param.pred_transform));
+  WriteString(writer, std::string(model.pred_transform.Data(), model.pred_transform.Size()));
   writer.Key("sigmoid_alpha");
-  writer.Double(model_param.sigmoid_alpha);
+  writer.Double(model.sigmoid_alpha);
   writer.Key("ratio_c");
-  writer.Double(model_param.ratio_c);
-  writer.Key("global_bias");
-  writer.Double(model_param.global_bias);
-
-  writer.EndObject();
+  writer.Double(model.ratio_c);
+  writer.Key("base_scores");
+  WriteArray(writer, model.base_scores);
 }
 
 }  // anonymous namespace
@@ -161,16 +175,31 @@ template <typename WriterType>
 void DumpModelAsJSON(WriterType& writer, Model const& model) {
   writer.StartObject();
 
+  // Header 1
+  writer.Key("version");
+  writer.StartArray();
+  auto version = model.GetVersion();
+  writer.Int(version.major_ver);
+  writer.Int(version.minor_ver);
+  writer.Int(version.patch_ver);
+  writer.EndArray();
+  writer.Key("threshold_type");
+  WriteString(writer, treelite::TypeInfoToString(model.GetThresholdType()));
+  writer.Key("leaf_output_type");
+  WriteString(writer, treelite::TypeInfoToString(model.GetLeafOutputType()));
+
+  // Header 2
+  writer.Key("num_tree");
+  writer.Uint64(model.GetNumTree());
   writer.Key("num_feature");
   writer.Int(model.num_feature);
   writer.Key("task_type");
   WriteString(writer, TaskTypeToString(model.task_type));
   writer.Key("average_tree_output");
   writer.Bool(model.average_tree_output);
-  writer.Key("task_param");
-  SerializeTaskParamToJSON(writer, model.task_param);
-  writer.Key("model_param");
-  SerializeModelParamToJSON(writer, model.param);
+  SerializeTaskParametersToJSON(writer, model);
+  SerializePerTreeMetadataToJSON(writer, model);
+  SerializeModelParametersToJSON(writer, model);
   writer.Key("trees");
   writer.StartArray();
   std::visit(

@@ -1,5 +1,5 @@
 /*!
- * Copyright (c) 2020-2021 by Contributors
+ * Copyright (c) 2020-2023 by Contributors
  * \file tree_impl.h
  * \brief Implementation for tree.h
  * \author Hyunsu Cho
@@ -67,6 +67,7 @@ inline Tree<ThresholdType, LeafOutputType> Tree<ThresholdType, LeafOutputType>::
 
 template <typename ThresholdType, typename LeafOutputType>
 inline char const* Tree<ThresholdType, LeafOutputType>::GetFormatStringForNode() {
+  // TODO(hcho3): fix format string
   if (std::is_same<ThresholdType, float>::value) {
     return "T{=l=l=L=f=Q=d=d=b=b=?=?=?=?xx}";
   } else {
@@ -81,9 +82,6 @@ inline void Tree<ThresholdType, LeafOutputType>::Node::Init() {
   sindex_ = 0;
   info_.leaf_value = static_cast<LeafOutputType>(0);
   info_.threshold = static_cast<ThresholdType>(0);
-  data_count_ = 0;
-  sum_hess_ = gain_ = 0.0;
-  data_count_present_ = sum_hess_present_ = gain_present_ = false;
   categories_list_right_child_ = false;
   split_type_ = SplitFeatureType::kNone;
   cmp_ = Operator::kNone;
@@ -98,6 +96,12 @@ inline int Tree<ThresholdType, LeafOutputType>::AllocNode() {
   for (int nid = nd; nid < num_nodes; ++nid) {
     leaf_vector_begin_.PushBack(0);
     leaf_vector_end_.PushBack(0);
+    data_count_.PushBack(0);
+    data_count_present_.PushBack(false);
+    sum_hess_.PushBack(0);
+    sum_hess_present_.PushBack(false);
+    gain_.PushBack(0);
+    gain_present_.PushBack(false);
     matching_categories_offset_.PushBack(matching_categories_offset_.Back());
     nodes_.Resize(nodes_.Size() + 1);
     nodes_.Back().Init();
@@ -146,7 +150,7 @@ inline void Tree<ThresholdType, LeafOutputType>::SetNumericalSplit(
 
 template <typename ThresholdType, typename LeafOutputType>
 inline void Tree<ThresholdType, LeafOutputType>::SetCategoricalSplit(int nid, unsigned split_index,
-    bool default_left, std::vector<uint32_t> const& categories_list,
+    bool default_left, std::vector<std::uint32_t> const& categories_list,
     bool categories_list_right_child) {
   if (split_index >= ((1U << 31U) - 1)) {
     throw Error("split_index too big");

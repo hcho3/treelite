@@ -72,17 +72,17 @@ target_sources(objtreelite
     PRIVATE
     c_api/c_api_error.cc
     c_api/c_api.cc
-    frontend/builder.cc
-    frontend/json_importer.cc
-    frontend/lightgbm.cc
-    frontend/sklearn.cc
+    #frontend/builder.cc
+    #frontend/json_importer.cc
+    #frontend/lightgbm.cc
+    #frontend/sklearn.cc
     frontend/xgboost.cc
     frontend/xgboost_json.cc
     frontend/xgboost_util.cc
-    gtil/predict.cc
-    gtil/config.cc
-    gtil/pred_transform.h
-    gtil/pred_transform.cc
+    #gtil/predict.cc
+    #gtil/config.cc
+    #gtil/pred_transform.h
+    #gtil/pred_transform.cc
     threading_utils/parallel_for.h
     data.cc
     json_serializer.cc
@@ -98,7 +98,7 @@ target_sources(objtreelite
     ${PROJECT_SOURCE_DIR}/include/treelite/error.h
     ${PROJECT_SOURCE_DIR}/include/treelite/frontend.h
     ${PROJECT_SOURCE_DIR}/include/treelite/frontend_impl.h
-    ${PROJECT_SOURCE_DIR}/include/treelite/gtil.h
+    #${PROJECT_SOURCE_DIR}/include/treelite/gtil.h
     ${PROJECT_SOURCE_DIR}/include/treelite/logging.h
     ${PROJECT_SOURCE_DIR}/include/treelite/math.h
     ${PROJECT_SOURCE_DIR}/include/treelite/omp.h
